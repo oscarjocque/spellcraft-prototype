@@ -2,16 +2,17 @@ class_name Spellbook
 extends RefCounted
 ## The player's ten spell slots, kept on disk between plays.
 
-const PATH := "user://spellbook.txt"
+static var path := "user://spellbook.txt"  # tools can point it elsewhere
 
 
 ## The saved slots, or the presets for any slot missing or no longer a spell
 ## (all of them, if nothing is saved).
-static func load_slots(path := PATH) -> Array:
+static func load_slots(from := "") -> Array:
+	var file_path := from if from != "" else path
 	var slots: Array = Sandbox.PRESETS.duplicate(true)
-	if not FileAccess.file_exists(path):
+	if not FileAccess.file_exists(file_path):
 		return slots
-	var saved: Variant = str_to_var(FileAccess.get_file_as_string(path))
+	var saved: Variant = str_to_var(FileAccess.get_file_as_string(file_path))
 	if not saved is Array:
 		return slots
 	for i in mini(saved.size(), slots.size()):
@@ -20,7 +21,7 @@ static func load_slots(path := PATH) -> Array:
 	return slots
 
 
-static func save_slots(slots: Array, path := PATH) -> void:
-	var file := FileAccess.open(path, FileAccess.WRITE)
+static func save_slots(slots: Array, to := "") -> void:
+	var file := FileAccess.open(to if to != "" else path, FileAccess.WRITE)
 	if file != null:
 		file.store_string(var_to_str(slots))

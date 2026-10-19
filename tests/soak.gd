@@ -12,6 +12,7 @@ const TYPED := ["mo st me", "destroy all fires within 3 of here, up to 2", "crea
 	"destroy products of chosen", "move all players to farthest stone", "mark random burning thing"]
 func _initialize():
 	rng.seed = 7
+	Spellbook.path = "user://soak_spellbook.txt"  # leave the real spellbook alone
 	main = load("res://scenes/main.tscn").instantiate()
 	root.add_child(main)
 func _process(_d):
