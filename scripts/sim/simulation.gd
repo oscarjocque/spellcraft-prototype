@@ -92,18 +92,23 @@ func cast(caster: WorldObject, ast: Dictionary, aim: Vector2) -> WorldObject:
 		return null
 	var drain := SpellGrammar.drain_per_second(ast)
 	var reserve := SpellGrammar.payload(ast)
-	for c in SpellGrammar.COLORS:
-		var need: float = drain.get(c, 0.0) + reserve.get(c, 0.0)
-		if caster.mana_store.get(c, 0.0) < need:
-			say("Not enough %s mana for: %s" % [c, SpellGrammar.to_text(ast)])
-			return null
-	for c in reserve:
-		caster.mana_store[c] -= reserve[c]
 	var fuel := {}
-	for c in drain:
-		var amount := minf(caster.mana_store[c], INFUSE_CAP)
-		caster.mana_store[c] -= amount
-		fuel[c] = amount
+	if caster.has_tag("infinite_mana"):
+		# Spells still get their usual mana; storage just never runs out.
+		for c in drain:
+			fuel[c] = INFUSE_CAP
+	else:
+		for c in SpellGrammar.COLORS:
+			var need: float = drain.get(c, 0.0) + reserve.get(c, 0.0)
+			if caster.mana_store.get(c, 0.0) < need:
+				say("Not enough %s mana for: %s" % [c, SpellGrammar.to_text(ast)])
+				return null
+		for c in reserve:
+			caster.mana_store[c] -= reserve[c]
+		for c in drain:
+			var amount := minf(caster.mana_store[c], INFUSE_CAP)
+			caster.mana_store[c] -= amount
+			fuel[c] = amount
 
 	# An independent selector is placed at the aim; other spells follow the caster.
 	var independent: bool = ast["verb"] == "select"

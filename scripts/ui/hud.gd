@@ -13,9 +13,12 @@ func _ready() -> void:
 
 func refresh(sim: Simulation, player: WorldObject, slots: Array, selected: int) -> void:
 	var mana := "[b]Mana[/b]  "
-	for c in SpellGrammar.COLORS:
-		var hex: String = WorldView.MANA_COLOR[c].to_html(false)
-		mana += "[color=#%s]%s %d/%d[/color]   " % [hex, c, player.mana_store.get(c, 0.0), Simulation.STORE_CAP]
+	if player.has_tag("infinite_mana"):
+		mana += "infinite"
+	else:
+		for c in SpellGrammar.COLORS:
+			var hex: String = WorldView.MANA_COLOR[c].to_html(false)
+			mana += "[color=#%s]%s %d/%d[/color]   " % [hex, c, player.mana_store.get(c, 0.0), Simulation.STORE_CAP]
 	var spells := 0
 	for o in sim.objects:
 		if o.spell != null:

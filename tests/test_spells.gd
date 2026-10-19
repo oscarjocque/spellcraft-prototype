@@ -13,7 +13,7 @@ func _init() -> void:
 		"test_not_enough_mana", "test_closest_never_picks_caster", "test_deterministic",
 		"test_payload", "test_create_spell_pays_from_reserve", "test_nested_create_spell",
 		"test_create_spell_needs_its_payload", "test_created_spell_stays_put",
-		"test_spell_absorbs_mana", "test_invalid_created_spell",
+		"test_spell_absorbs_mana", "test_invalid_created_spell", "test_infinite_mana",
 	]:
 		call(t)
 	print("FAILED: %d" % _failures if _failures else "All tests passed.")
@@ -265,6 +265,20 @@ func test_invalid_created_spell() -> void:
 	var long_spell := {"verb": "create", "what": {"spell": {"verb": "create", "what": {"spell":
 		{"verb": "move", "what": {"closest": "stone"}, "to": {"closest": "player"}}}}}}
 	check(SpellGrammar.validate(long_spell) == "", "Spells have no word limit")
+
+
+func test_infinite_mana() -> void:
+	var w := world()
+	var sim: Simulation = w[0]
+	var p: WorldObject = w[1]
+	p.tags["infinite_mana"] = true
+	for c in SpellGrammar.COLORS:
+		p.mana_store[c] = 0.0
+	var host := sim.cast(p, FIRE_WARDEN, Vector2(400, 360))
+	check(host != null, "Infinite mana casts with empty storage")
+	check(p.mana_store["violet"] == 0.0, "Infinite mana takes nothing from storage")
+	var child: WorldObject = host.spell.what
+	check(child.spell.mana == {"violet": 10.0, "red": 5.0}, "Spells still get their usual mana and reserve")
 
 
 func test_deterministic() -> void:

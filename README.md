@@ -23,7 +23,10 @@ selector are enough to build spells that interact in ways nobody scripted.
 | Tab | Open or close the spell editor (pauses the simulation) |
 | R | Reset the sandbox |
 
-Walk over the colored diamonds to collect mana.
+For now the player has **infinite mana**: casting never takes from storage,
+but each spell still gets its usual fuel and reserve. To turn it off, remove
+the `infinite_mana` tag in `scripts/sandbox.gd`. Then walk over the colored
+diamonds to collect mana.
 
 ## What's in Prototype 1
 

@@ -19,6 +19,7 @@ const PRESETS := [
 ## Fills `sim` with the arena and returns the local player.
 static func build(sim: Simulation) -> WorldObject:
 	var player := sim.spawn(Materials.make_player(Vector2(220, 360), 0))
+	player.tags["infinite_mana"] = true  # for now, while spells are being explored
 	sim.spawn(Materials.make_player(Vector2(1060, 360)))  # training dummy
 
 	for p in [Vector2(480, 180), Vector2(470, 560), Vector2(780, 250), Vector2(820, 520)]:
