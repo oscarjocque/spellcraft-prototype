@@ -1018,6 +1018,61 @@ func test_impact_hurts_both_and_spares_walkers() -> void:
 	check(wall.health == wall.max_health and p.health == p.max_health, "Walking into a wall hurts nothing")
 
 
+func test_parse_round_trip() -> void:
+	var spells: Array = Sandbox.PRESETS.duplicate(true)
+	spells.append_array([
+		{"verb": "destroy", "what": {"all": "fire", "within": 3, "from": {"ref": "there"}}, "adverbs": {"up_to": 2}},
+		{"verb": "move", "what": {"closest": "stone", "adj": ["moving", "mine"], "from": {"ref": "this"}}, "to": {"ref": "here"}},
+		{"verb": "mark", "what": {"caster_of": {"target_of": {"ref": "chosen"}}}},
+		{"verb": "create", "what": {"spell": {"verb": "create", "what": {"material": "fire"}, "at": {"ref": "here"}}}, "adverbs": {"up_to": 5}},
+		{"verb": "create", "what": {"material": "water"}, "at": {"farthest": "player", "within": 5}},
+		{"verb": "alternate", "first": {"ref": "chosen"}, "second": {"slot": 9}},
+		{"verb": "select", "what": {"random": "thing", "adj": ["burning"]}},
+		{"verb": "destroy", "what": {"products_of": {"maker_of": {"ref": "aimed"}}}},
+	])
+	for ast in spells:
+		var text := SpellGrammar.to_text(ast)
+		var back := SpellParser.parse(text)
+		check(back.get("ast") == ast, "\"%s\" reads back as the same spell (got %s)" % [text, back])
+
+
+func test_parse_typed() -> void:
+	var cases := {
+		"move closest stone to me": "Move (Closest Stone) to Me.",
+		"mo cl st to me": "Move (Closest Stone) to Me.",
+		"destroy all fires within 3 of there, up to 2": "Destroy (All Fire within 3 m of There), up to 2.",
+		"d all fire within 3m up 2": "Destroy (All Fire within 3 m), up to 2.",
+		"move closest stone to closest player to me": "Move (Closest Stone) to (Closest Player to Me).",
+		"create spell destroy closest fire": "Create Spell [Destroy (Closest Fire)].",
+		"create fire at aimed": "Create Fire at Aimed.",
+		"closest player": "Hold (Closest Player).",
+		"alternate 5 6": "Alternate [spell 5] [spell 6].",
+		"alt chosen 0": "Alternate [Chosen] [spell 0].",
+		"move closest stone to target of chosen": "Move (Closest Stone) to (Target of Chosen).",
+		"mark all moving mine things": "Mark (All Moving Mine Thing).",
+		"MOVE This to THERE.": "Move This to There.",
+	}
+	for typed in cases:
+		var r := SpellParser.parse(typed)
+		var got: String = SpellGrammar.to_text(r["ast"]) if r.has("ast") else "error: " + r["error"]
+		check(got == cases[typed], "\"%s\" reads as %s (got %s)" % [typed, cases[typed], got])
+	check(SpellParser.parse("move closest stone").has("error"), "An unfinished spell is an error")
+	check("to" in SpellParser.parse("move closest stone").get("error", ""), "...saying what could come next")
+	check(SpellParser.parse("move banana to me").has("error"), "Words that don't fit are an error")
+	check(SpellParser.parse("alternate 2 2").has("ast"), "Slots aren't checked until casting (they're copied in then)")
+
+
+func test_suggest() -> void:
+	check(SpellParser.suggest("").slice(0, 3) == ["move", "create", "destroy"], "An empty line suggests verbs first")
+	check(SpellParser.suggest("move closest st") == ["stone"], "A partial word suggests what it could be")
+	check(SpellParser.suggest("move closest stone ") == ["within", "to"], "After a picker: its options, then Move's to")
+	check(SpellParser.suggest("destroy closest fire ").has("up"), "A finished spell suggests adverbs")
+	check(SpellParser.suggest("create ") == ["fire", "water", "wood", "stone", "spell"], "Create suggests what to create")
+	check(SpellParser.suggest("move banana ").is_empty(), "Nothing fits after a mistake")
+	for text in ["", "m", "move ", "move closest ", "destroy all fire within "]:
+		check(SpellParser.suggest(text).size() <= 5, "Never more than five suggestions")
+
+
 func test_deterministic() -> void:
 	check(_replay() == _replay(), "Same inputs give the same world")
 

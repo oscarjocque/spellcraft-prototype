@@ -264,8 +264,9 @@ static func share(inner: Dictionary) -> Dictionary:
 	return need
 
 
-## Returns "" if the spell is grammatical, else why not.
-static func validate(ast: Dictionary) -> String:
+## Returns "" if the spell is grammatical, else why not. With `need_slots`
+## false, an Alternate's slots needn't be copied in yet (as when typing it).
+static func validate(ast: Dictionary, need_slots := true) -> String:
 	var adverbs: Variant = ast.get("adverbs", {})
 	if not adverbs is Dictionary or not adverbs.keys().all(func(a: Variant) -> bool: return a in ADVERBS):
 		return "Unknown adverb."
@@ -282,7 +283,7 @@ static func validate(ast: Dictionary) -> String:
 			if what.has("spell"):
 				if not what["spell"] is Dictionary:
 					return "Create Spell needs a description of the spell."
-				return validate(what["spell"])
+				return validate(what["spell"], need_slots)
 			if not what.get("material", "") in MATERIALS:
 				return "Create needs a material or a spell."
 		"destroy", "mark":
@@ -304,8 +305,10 @@ static func validate(ast: Dictionary) -> String:
 				if not arg.has("slot") or not arg["slot"] is int or arg["slot"] < 0 or arg["slot"] > 9:
 					return "Alternate takes a spell slot or an attached spell."
 				if not arg.get("spell") is Dictionary:
+					if not need_slots:
+						continue
 					return "Alternate's spell %d is empty or leads back to itself." % ((arg["slot"] + 1) % 10)
-				var err := validate(arg["spell"])
+				var err := validate(arg["spell"], need_slots)
 				if err != "":
 					return err
 		_:
@@ -368,60 +371,101 @@ static func _picks_in(noun: Dictionary, out: Array[Dictionary]) -> void:
 
 
 static func to_text(ast: Dictionary) -> String:
-	return _sentence(ast) + "."
-
-
-static func _sentence(ast: Dictionary) -> String:
-	var text := _clause(ast)
-	if up_to(ast) > 0:
-		text += ", up to %d" % up_to(ast)
-	return text
-
-
-static func _clause(ast: Dictionary) -> String:
-	match ast.get("verb", ""):
-		"create":
-			var inner := created_spell(ast)
-			var text := "Create Spell [%s]" % _sentence(inner) if not inner.is_empty() \
-					else "Create %s" % ast["what"]["material"].capitalize()
-			if ast.get("at") is Dictionary:
-				text += " at %s" % noun_text(ast["at"])
-			return text
-		"destroy", "mark":
-			return "%s %s" % [ast["verb"].capitalize(), noun_text(ast["what"])]
-		"move":
-			return "Move %s to %s" % [noun_text(ast["what"]), noun_text(ast["to"])]
-		"select":
-			return "Hold %s" % noun_text(held_noun(ast))
-		"alternate":
-			return "Alternate %s %s" % [_arg_text(ast["first"]), _arg_text(ast["second"])]
-	return "?"
+	return join(segments(ast))
 
 
 static func noun_text(noun: Dictionary) -> String:
+	var out := []
+	_noun_segments(noun, out)
+	return join(out)
+
+
+## The spell as a sentence, in pieces: [text, word] pairs, where word is the
+## block the text stands for (its mana color) or "" for words that are free.
+static func segments(ast: Dictionary) -> Array:
+	var out := []
+	_sentence_segments(ast, out)
+	out.append([".", ""])
+	return out
+
+
+## Joins segments into text: spaced as words, punctuation attached.
+static func join(segs: Array) -> String:
+	var text := ""
+	for seg in segs:
+		var t: String = seg[0]
+		if text != "" and not text.ends_with("(") and not text.ends_with("[") \
+				and not t in [")", "]", ",", "."]:
+			text += " "
+		text += t
+	return text
+
+
+static func _sentence_segments(ast: Dictionary, out: Array) -> void:
+	match ast.get("verb", ""):
+		"create":
+			out.append(["Create", "create"])
+			var inner := created_spell(ast)
+			if not inner.is_empty():
+				out.append(["Spell", "spell"])
+				out.append(["[", ""])
+				_sentence_segments(inner, out)
+				out.append(["]", ""])
+			else:
+				out.append([ast["what"]["material"].capitalize(), ast["what"]["material"]])
+			if ast.get("at") is Dictionary:
+				out.append(["at", "at"])
+				_noun_segments(ast["at"], out)
+		"destroy", "mark":
+			out.append([ast["verb"].capitalize(), ast["verb"]])
+			_noun_segments(ast["what"], out)
+		"move":
+			out.append(["Move", "move"])
+			_noun_segments(ast["what"], out)
+			out.append(["to", ""])
+			_noun_segments(ast["to"], out)
+		"select":
+			out.append(["Hold", ""])
+			_noun_segments(held_noun(ast), out)
+		"alternate":
+			out.append(["Alternate", "alternate"])
+			for arg in [ast["first"], ast["second"]]:
+				out.append(["[", ""])
+				if not arg_spell(arg).is_empty():
+					_sentence_segments(arg_spell(arg), out)
+				elif arg.has("slot"):
+					out.append(["spell %d" % ((arg["slot"] + 1) % 10), ""])
+				else:
+					out.append(["Chosen", "chosen"])
+				out.append(["]", ""])
+		_:
+			out.append(["?", ""])
+	if up_to(ast) > 0:
+		out.append([",", ""])
+		out.append(["up to %d" % up_to(ast), "up_to"])
+
+
+static func _noun_segments(noun: Dictionary, out: Array) -> void:
 	if noun.has("ref"):
-		return noun["ref"].capitalize()
+		out.append([noun["ref"].capitalize(), noun["ref"]])
+		return
+	out.append(["(", ""])
 	var rel := relation_of(noun)
 	if rel != "":
-		return "(%s %s)" % [rel.capitalize().replace(" Of", " of"), noun_text(noun[rel])]
-	var picker := picker_of(noun)
-	var words: Array[String] = [picker.capitalize()]
-	for a in noun.get("adj", []):
-		words.append(a.capitalize())
-	words.append(noun[picker].capitalize())
-	if noun.has("within"):
-		words.append("within %d m" % noun["within"])
-		if noun.get("from") is Dictionary:
-			words.append("of " + noun_text(noun["from"]))
-	elif noun.get("from") is Dictionary:
-		words.append("to " + noun_text(noun["from"]))
-	return "(%s)" % " ".join(words)
-
-
-## An Alternate's argument: the spell copied in, else its slot, else Chosen.
-static func _arg_text(arg: Dictionary) -> String:
-	if not arg_spell(arg).is_empty():
-		return "[%s]" % _sentence(arg_spell(arg))
-	if arg.has("slot"):
-		return "[spell %d]" % ((arg["slot"] + 1) % 10)
-	return "[Chosen]"
+		out.append([rel.capitalize().replace(" Of", " of"), rel])
+		_noun_segments(noun[rel], out)
+	else:
+		var picker := picker_of(noun)
+		out.append([picker.capitalize(), picker])
+		for a in noun.get("adj", []):
+			out.append([a.capitalize(), a])
+		out.append([noun[picker].capitalize(), noun[picker]])
+		if noun.has("within"):
+			out.append(["within %d m" % noun["within"], "within"])
+			if noun.get("from") is Dictionary:
+				out.append(["of", "from"])
+				_noun_segments(noun["from"], out)
+		elif noun.get("from") is Dictionary:
+			out.append(["to", "from"])
+			_noun_segments(noun["from"], out)
+	out.append([")", ""])
