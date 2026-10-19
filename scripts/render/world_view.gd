@@ -132,7 +132,8 @@ func _draw_player(o: WorldObject) -> void:
 
 
 ## A spell is a small diamond in its verb's color, with lines to what it acts
-## on: solid to its target, dashed to a Move destination.
+## on: solid to its target, dashed to a Move destination. Hollow while it
+## waits for something to act on, faded while it waits for its turn.
 func _draw_spell(o: WorldObject) -> void:
 	var s := o.spell
 	var p: Vector2 = _spell_at.get(o, _p(o))
@@ -141,11 +142,15 @@ func _draw_spell(o: WorldObject) -> void:
 		_draw_diamond(p, o.radius, Color(color, 0.35))  # waiting for its turn
 		return
 	var dest := s.destination()
-	for target in s.targets():
+	var targets := s.targets()
+	for target in targets:
 		draw_line(p, _p(target), Color(color, 0.5), 1.5)
 		if dest != null:
 			draw_dashed_line(_p(target), _p(dest), Color(color, 0.5), 1.5, 6.0)
-	_draw_diamond(p, o.radius + 2, color)
+	if targets.is_empty() and s.ast["verb"] != "create":
+		_draw_diamond_outline(p, o.radius + 2, color)
+	else:
+		_draw_diamond(p, o.radius + 2, color)
 
 
 ## The spell drawn at `at` (as placed this frame), or null.
@@ -201,6 +206,12 @@ func _draw_diamond(p: Vector2, r: float, color: Color) -> void:
 	draw_colored_polygon(PackedVector2Array([
 		p + Vector2(0, -r), p + Vector2(r, 0), p + Vector2(0, r), p + Vector2(-r, 0),
 	]), color)
+
+
+func _draw_diamond_outline(p: Vector2, r: float, color: Color) -> void:
+	draw_polyline(PackedVector2Array([
+		p + Vector2(0, -r), p + Vector2(r, 0), p + Vector2(0, r), p + Vector2(-r, 0), p + Vector2(0, -r),
+	]), color, 1.5)
 
 
 func _draw_health(o: WorldObject, p: Vector2) -> void:

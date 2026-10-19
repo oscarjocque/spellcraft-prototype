@@ -92,17 +92,19 @@ static func parse(text: String) -> Dictionary:
 	var tokens := _plain(tokenize(text))
 	if tokens.is_empty():
 		return {"error": "Type a spell."}
-	var strict := SpellParser.new()
-	strict._tokens = tokens
-	var r := strict._read()
+	var r := _reader(tokens, false)._read()
 	if r.has("ast"):
 		return r
 	# Only then forgive slips, so a word typed right is never misread.
-	var forgiving := SpellParser.new()
-	forgiving._tokens = tokens
-	forgiving._forgiving = true
-	var f := forgiving._read()
+	var f := _reader(tokens, true)._read()
 	return f if f.has("ast") else r
+
+
+static func _reader(tokens: Array[String], forgiving: bool) -> SpellParser:
+	var p := SpellParser.new()
+	p._tokens = tokens
+	p._forgiving = forgiving
+	return p
 
 
 func _read() -> Dictionary:
@@ -130,13 +132,10 @@ static func suggest(text: String, limit := 5) -> Array[String]:
 			and not text.ends_with("[") and not text.ends_with(","):
 		partial = tokens.pop_back()
 	tokens = _plain(tokens)
-	var p := SpellParser.new()
-	p._tokens = tokens
+	var p := _reader(tokens, false)
 	p._spell(0)
 	if p._furthest != tokens.size():  # an earlier word slipped?
-		p = SpellParser.new()
-		p._tokens = tokens
-		p._forgiving = true
+		p = _reader(tokens, true)
 		p._spell(0)
 	var out: Array[String] = []
 	if p._furthest != tokens.size():

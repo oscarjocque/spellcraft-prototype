@@ -170,6 +170,11 @@ listed top right, and **Chosen** lets another spell use one:
 follows what a held selector picks now. Several spells can use the same held
 noun.
 
+Attached spells are diamonds in a ring around you, numbered as in the list,
+in their verb's color, with lines to what they act on. A hollow diamond is
+waiting for something to act on; a faded one is waiting for its turn in an
+Alternate. Point at one to see its words, what it's doing and its mana.
+
 **Space** drops one of your attached spells, picked in a window while the
 game keeps running: it stays where it is, stops following you, and leaves
 your inventory. Since it's no longer attached to you, its pickers can pick
