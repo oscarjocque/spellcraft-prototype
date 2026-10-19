@@ -14,7 +14,7 @@ var player: WorldObject
 var slots: Array = Sandbox.PRESETS.duplicate(true)
 var selected := 0  # the slot cast last, highlighted in the HUD
 var _accum := 0.0
-var _pending_cast := {}  # {"ast", "aim"} to send with the next tick's command
+var _pending_casts := []  # {"ast", "aim"} to send, one per tick, oldest first
 var _casting := {}  # a cast waiting on picks: {"ast", "aim", "nouns", "index"}
 var _dropping := false  # the picker is choosing a spell to drop
 var _pending_drop := 0  # id of a spell to drop with the next tick's command
@@ -48,7 +48,7 @@ func _reset() -> void:
 	player = Sandbox.build(sim)
 	view.sim = sim
 	_accum = 0.0
-	_pending_cast = {}
+	_pending_casts.clear()
 	_casting = {}
 	_dropping = false
 	_pending_drop = 0
@@ -82,10 +82,10 @@ func _command() -> Dictionary:
 		"move": Vector2.ZERO if typing else Input.get_vector("move_left", "move_right", "move_up", "move_down"),
 		"aim": view.get_global_mouse_position(),
 	}
-	if not _pending_cast.is_empty():
-		cmd["cast"] = _pending_cast["ast"]
-		cmd["aim"] = _pending_cast["aim"]
-		_pending_cast = {}
+	if not _pending_casts.is_empty():
+		var next: Dictionary = _pending_casts.pop_front()
+		cmd["cast"] = next["ast"]
+		cmd["aim"] = next["aim"]
 	if _pending_drop != 0:
 		cmd["drop"] = _pending_drop
 		_pending_drop = 0
@@ -106,10 +106,22 @@ func _cast(spell: Dictionary, aim: Vector2, slot: int) -> void:
 	# The spells of the slots an Alternate uses are copied in now, as they are.
 	var ast := SpellGrammar.embed_slots(spell, slots, [slot] if slot >= 0 else [])
 	var nouns := SpellGrammar.cast_picks(ast)
-	if nouns.is_empty():
-		_pending_cast = {"ast": ast, "aim": aim}
-		return
 	_casting = {"ast": ast, "aim": aim, "nouns": nouns, "index": 0}
+	# The first pick can come from where the mouse already is: This is the
+	# object under it, There the spot. The rest are asked for.
+	if not nouns.is_empty():
+		var first: String = nouns[0]["ref"]
+		var under := _object_at(aim)
+		if first == "there":
+			_on_picked(aim)
+			return
+		if first == "this" and under != null:
+			_on_picked(under.id)
+			return
+	if nouns.is_empty():
+		_pending_casts.append({"ast": ast, "aim": aim})
+		_casting = {}
+		return
 	_ask_next()
 
 
@@ -148,7 +160,7 @@ func _on_picked(value: Variant) -> void:
 	if _casting["index"] < _casting["nouns"].size():
 		_ask_next()
 	else:
-		_pending_cast = {"ast": _casting["ast"], "aim": _casting["aim"]}
+		_pending_casts.append({"ast": _casting["ast"], "aim": _casting["aim"]})
 		_casting = {}
 
 

@@ -97,11 +97,14 @@ A noun says what a spell acts on. Spells read like sentences:
   spell, or of a noun). A spell attached to you never picks you. Inside a
   spell a picker chooses once, at cast; a held one (Hold) chooses again
   every tick, and Random sticks with its pick while it still fits.
-- **Picked when casting:** **This** (click an object), **There** (click a
-  spot; it becomes an invisible place marker for as long as the spell lasts)
-  and **Chosen** (pick one of your attached spells in a window). Each use is
-  picked separately, in reading order; the game keeps running while you pick,
-  and Esc cancels the cast.
+- **Picked when casting:** **This** (an object), **There** (a spot; it becomes
+  an invisible place marker for as long as the spell lasts) and **Chosen**
+  (one of your attached spells, from a window, by its number key). Each use
+  is picked separately, in reading order; the game keeps running while you
+  pick, and Esc cancels the cast. The first pick comes from where you're
+  already aiming: a first This is the object under the mouse when you cast
+  (if there is one), a first There is the mouse's spot, so `Create Fire at
+  There` lands at the cursor at once; later ones are clicked.
 - **Aimed** is the first object along the line from the spell toward where
   you cast it. **Me** is you. **Here** is the spell's own location: where you
   are for a spell you cast, or where a created spell sits, so
