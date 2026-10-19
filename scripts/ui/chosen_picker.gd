@@ -5,7 +5,8 @@ extends PanelContainer
 ## spell to drop. The game keeps running meanwhile.
 ##
 ## Spells keep the numbers they have in the HUD's list of attached spells,
-## and their number key picks them; 0 picks Nothing where that's allowed.
+## and their number key picks them (as does clicking one in the world); 0
+## picks Nothing where that's allowed.
 ## At most five entries show at a time, with "More" for the rest. Esc cancels.
 
 signal picked(id: int)  # a spell's id, 0 for nothing
@@ -13,7 +14,7 @@ signal cancelled
 
 const PAGE := 5
 
-var _title: Label
+var _title: RichTextLabel
 var _options: VBoxContainer
 var _entries := []  # [key, bbcode, action]
 var _page := 0
@@ -30,20 +31,25 @@ func _ready() -> void:
 	custom_minimum_size = Vector2(480, 0)
 	var box := VBoxContainer.new()
 	add_child(box)
-	_title = Label.new()
+	_title = RichTextLabel.new()
+	_title.bbcode_enabled = true
+	_title.fit_content = true
+	_title.scroll_active = false
+	_title.custom_minimum_size.x = 456  # else it wraps at no width and grows tall
 	box.add_child(_title)
 	_options = VBoxContainer.new()
 	box.add_child(_options)
 	var hint := Label.new()
-	hint.text = "number keys pick   ·   Esc cancels"
+	hint.text = "number keys pick, or click the spell by you   ·   Esc cancels"
 	hint.add_theme_font_size_override("font_size", 12)
 	hint.add_theme_color_override("font_color", Color("8a8f98"))
 	box.add_child(hint)
 
 
-## Shows the choice for Chosen `index` (1-based) of `total` in `spell_text`.
-func ask(spell_text: String, index: int, total: int, attached: Array[WorldObject]) -> void:
-	_open("%s\nChosen %d of %d: which attached spell?" % [spell_text, index, total], attached, true)
+## Shows the choice for Chosen `index` (1-based) of `total` in `spell`.
+func ask(spell: Dictionary, index: int, total: int, attached: Array[WorldObject]) -> void:
+	_open("%s\n[b][color=#ffd34d]Chosen %d of %d:[/color][/b] which attached spell?" % [SpellText.bbcode(spell),
+			index, total], attached, true)
 
 
 ## Shows the choice of an attached spell to drop.
@@ -119,6 +125,14 @@ func _add_option(bbcode: String, on_press: Callable) -> void:
 	label.text = bbcode
 	b.add_child(label)
 	_options.add_child(b)
+
+
+## Picks the attached spell `id`, if it's one on offer.
+func choose(id: int) -> void:
+	for e in _entries:
+		if e[2].get_bound_arguments() == [id]:
+			e[2].call()
+			return
 
 
 func _pick(id: int) -> void:

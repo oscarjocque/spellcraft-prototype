@@ -1328,3 +1328,22 @@ func test_spellbook_undo() -> void:
 	editor._undo_last()
 	check(slots[2] == before, "...and the whole bout of typing at once")
 	editor.free()
+
+
+func test_picker_choose() -> void:
+	var w := spell_world()
+	var sim: Simulation = w[0]
+	var p: WorldObject = w[1]
+	var a := sim.cast(p, {"verb": "select", "what": {"ref": "me"}}, p.pos)
+	var b := sim.cast(p, {"verb": "select", "what": {"ref": "here"}}, p.pos)
+	var picker := ChosenPicker.new()
+	root.add_child(picker)
+	var got := []
+	picker.picked.connect(func(id: int) -> void: got.append(id))
+	picker.ask({"verb": "select", "what": {"ref": "chosen"}}, 1, 1, sim.inventory(p))
+	picker.choose(12345)
+	check(got.is_empty() and picker.visible, "Clicking a spell that isn't on offer picks nothing")
+	picker.choose(b.id)
+	check(got == [b.id] and not picker.visible, "Clicking an attached spell picks it")
+	check(a != null, "(setup)")
+	picker.free()

@@ -88,17 +88,11 @@ func _process(delta: float) -> void:
 	elif quick.visible:
 		quick.set_status("")
 	hud.visible_parts(not editor.visible)
-	var under := sim.object_at(mouse)
-	var spell := view.spell_at(mouse) if under == null else null
 	var tip := ""
-	if editor.visible:
-		pass
-	elif hovered >= 0:
-		pass  # the line itself says what to do
-	elif under != null:
-		tip = _describe(under)
-	elif spell != null:
-		tip = _describe_spell(spell)
+	if not editor.visible and hovered < 0:  # a hovered slot's line says what to do itself
+		var under := sim.object_at(mouse)
+		var spell := view.spell_at(mouse) if under == null else null
+		tip = _describe(under) if under != null else _describe_spell(spell) if spell != null else ""
 	var what := flow.picking()
 	if what in ["this", "there"]:  # where the eyes are: by the mouse
 		tip = "[color=#ffd34d][b]%s?[/b] click %s · Esc cancels[/color]\n%s" % [what.capitalize(),
@@ -141,7 +135,7 @@ func _cast(spell: Dictionary, aim: Vector2, slot: int) -> void:
 ## Opens the window for a Chosen, if that's the pick to make.
 func _ask_chosen() -> void:
 	if flow.picking() == "chosen":
-		picker.ask(SpellGrammar.to_text(flow.spell()), flow.pick_number(), flow.pick_count(), sim.inventory(player))
+		picker.ask(flow.spell(), flow.pick_number(), flow.pick_count(), sim.inventory(player))
 
 
 func _on_picked(value: Variant) -> void:
@@ -231,6 +225,12 @@ func _unhandled_input(event: InputEvent) -> void:
 		_handle_world_pick(event)
 		return
 	var clicked: bool = event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT
+	if picker.visible and clicked:
+		var spell := view.spell_at(view.get_global_mouse_position())
+		if spell != null:
+			picker.choose(spell.id)  # an attached spell, clicked by the player
+		get_viewport().set_input_as_handled()
+		return
 	var slot_clicked := hud.slot_at(get_viewport().get_mouse_position(), slots.size()) if clicked else -1
 	if slot_clicked >= 0 and not quick.visible and not flow.busy():
 		selected = slot_clicked

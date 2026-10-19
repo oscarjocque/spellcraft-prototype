@@ -23,43 +23,43 @@ selector are enough to build spells that interact in ways nobody scripted.
 | Tab | Open or close the spellbook (pauses the simulation) |
 | Left click | While typing a spell, cast it there; while picking This or There, pick |
 | Esc | Cancel a cast that is waiting for picks (a right click does too), or close the typing bar |
-| Space | Drop one of your attached spells (pick it in a window) |
+| Space | Drop one of your attached spells (pick it in a window, or click it by you) |
 | F1 | Show every word, colored by mana, with typed examples |
 | R | Reset the sandbox |
 
 ### Making spells fast
 
-**Type them.** Press **Enter**, type the spell, press **Enter** again: it's
-cast toward the mouse. Words can be cut to any prefix that fits where they
-stand, so `mo cl st to me` is `Move (Closest Stone) to Me`; a thing on its
-own means the closest one (`move stone me`, `destroy fire`); parentheses,
-commas, "of", "to" and "m" are optional, plurals are fine (`destroy all fires
-within 3 of there, up to 2`), and a noun on its own holds it (`closest player`).
-Leave out what a verb acts on and it acts on what the mouse is on (`de` is
-`Destroy This`); leave out where Move moves it and it goes to the mouse
-(`mo st` is `Move (Closest Stone) to There`). A slip of one letter (missing,
-extra, wrong or swapped: `mvoe stoen`) is read as the word it nearly is, when
-nothing reads without it; the spell shown under the bar is how it was read.
-Everyday words work too, and "a", "an" and "the" are skipped: `make a fire`,
-`kill the nearest rock`, `grab every rock`, `pull stone` (Move it to Me),
-`put the rock there`.
-While the typed spell reads, the world rings what it would act on right now,
-and a line says how much, or that it would wait.
-While you type, up to five words that could come next are suggested (**Tab**
-takes the first) and the spell is shown as it's understood, colored by the
-mana each word costs, with its cost. **Ctrl+1–0** saves it to that slot
-instead, **Shift+Enter** casts and keeps the bar open for the next; **↑/↓**
-recall spells typed before, and Enter on the empty bar casts the last one
-again (so Enter, Enter repeats it). Instead of Enter you can **click** where to cast
-it: what you click is its This (or its There), so `de` and a click destroys
-that thing, and **Shift+click** keeps the spell ready to click onto more. Pointing at something shows the words that
-describe it (Stone · moving · mine).
+**Type them.** Press **Enter**, type the spell, and press **Enter** to cast
+it toward the mouse, or **click** where to cast it.
 
-**Or pick them from your slots.** Number keys cast them toward the mouse.
+- **Short words.** Any prefix that fits where it stands: `mo cl st to me` is
+  `Move (Closest Stone) to Me`.
+- **Left-out words.** A thing on its own is the closest one (`destroy fire`).
+  A verb with no noun acts on what the mouse is on (`de` is `Destroy This`,
+  so `de` and a click destroys what you click), and Move with no place moves
+  to the mouse (`mo st`). A noun on its own holds it (`closest player`).
+  Parentheses, commas, "of", "to" and "m" are optional; plurals are fine.
+- **Slips and everyday words.** One wrong, missing, extra or swapped letter is
+  forgiven (`mvoe stoen`). `make a fire`, `kill the nearest rock`, `grab every
+  rock`, `pull stone` (Move it to Me) and `put the rock there` work, and "a",
+  "an" and "the" are skipped.
+- **Help as you type.** Up to five next words are suggested (**Tab** takes the
+  first, which shows faintly after the caret). The spell is shown as it was
+  read, colored by the mana each word costs, with its cost. The world rings
+  what it would act on now, and a line says how much, or that it would wait.
+- **Repeat and keep.** **Enter** on the empty bar casts the last spell again;
+  **↑/↓** go through earlier ones. **Shift+Enter** casts and keeps the bar open
+  for the next, **Shift+click** keeps the spell ready to click onto more
+  things, and **Ctrl+1–0** saves it to that slot.
+
+Pointing at something shows the words that describe it (Stone · moving ·
+mine); pointing at a spell shows what it's doing and the mana it has left.
+
+**Or cast them from your slots.** Number keys cast them toward the mouse.
 Pointing at a slot's line in the list rings what it would act on now, and
 clicking it opens it in the spellbook.
 
-**Or click them.** **Tab** opens the spellbook: your ten slots on the left,
+**Or click them together.** **Tab** opens the spellbook: your ten slots on the left,
 the chosen one on the right, where you can type it the same way or click its
 words. Each word opens a menu of at most five choices (longer lists are split
 into submenus: Pick ▸ Closest, Farthest, Random, All), "+" adds optional parts
