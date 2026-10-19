@@ -5,7 +5,9 @@ extends RefCounted
 ## Create has no goal: it builds one object after another in a line along the
 ## direction it was cast, sustaining each finished one (fire doesn't burn out),
 ## until its mana runs out. Create Spell likewise makes a line of spells, one
-## every CREATE_SPELL_TICKS, until it has made CREATED_SPELLS of them.
+## every CREATE_SPELL_TICKS, until it has made CREATED_SPELLS of them. Each new
+## one goes in the nearest free place on the line, so gaps get refilled; when
+## the line is full up to the arena's edge, Create waits for space.
 ##
 ## Anchors: every spell a player casts follows them, including a bare selector,
 ## which they hold until a later spell takes it in with the noun Held. Spells
@@ -41,6 +43,7 @@ var _to_hops := 0
 var _drain := {}  # color -> mana per tick
 var _dir := Vector2.RIGHT  # the direction it was cast in
 var _build := 0.0
+var _building: WorldObject  # the object Create is growing, or null while it waits
 var _build_step := 0.0
 var _full_radius := 0.0
 var _lifetime := -1  # a created object's full lifetime in ticks, -1 = none
@@ -103,14 +106,41 @@ func on_cast(sim: Simulation, aim: Vector2) -> void:
 	caster.last_it = host if is_selector() else target()
 
 
-## Starts building the next object of a Create line, just past the last one.
+## Starts building the next object of a Create line in its nearest free
+## place, or leaves `_building` null if there is none.
 func _start_object(sim: Simulation) -> void:
-	var along := _edge + _full_radius + created.size() * (2.0 * _full_radius + CREATE_SPACING)
-	what = sim.spawn(Materials.make(_material, host.pos + _dir * along))
-	what.radius = 2.0
-	_lifetime = what.lifetime
+	_building = null
+	var pos := _free_place(_edge + _full_radius, 2.0 * _full_radius + CREATE_SPACING, _full_radius,
+			func(at: Vector2) -> bool: return _is_clear(sim, at, _full_radius))
+	if pos == Vector2.INF:
+		return
+	_building = sim.spawn(Materials.make(_material, pos))
+	_building.radius = 2.0
+	_lifetime = _building.lifetime
 	_build = 0.0
-	created.append(what)
+	created.append(_building)
+	what = _building
+
+
+## The nearest place on the line, `first` from the host and then every `step`,
+## that is inside the arena and passes `free`; Vector2.INF if there is none.
+func _free_place(first: float, step: float, radius: float, free: Callable) -> Vector2:
+	var arena := Simulation.ARENA.grow(-radius)
+	var pos := host.pos + _dir * first
+	while arena.has_point(pos):
+		if free.call(pos):
+			return pos
+		pos += _dir * step
+	return Vector2.INF
+
+
+## Nothing physical (not a spell or mana) overlaps a circle of `radius` at `at`.
+func _is_clear(sim: Simulation, at: Vector2, radius: float) -> bool:
+	for o in sim.objects:
+		if not o.dead and o.spell == null and not o.has_tag("mana") \
+				and at.distance_to(o.pos) < o.radius + radius:
+			return false
+	return true
 
 
 ## Starts the next spell of a Create Spell line, just past the last one, paid
@@ -121,10 +151,15 @@ func _create_spell(sim: Simulation) -> void:
 	var inner_fuel := SpellGrammar.drain_per_second(_inner)
 	for c in inner_fuel:
 		inner_fuel[c] *= SpellGrammar.CREATED_SPELL_SECONDS
+	# A place is free if none of this spell's living creations sits there.
+	var pos := _free_place(_edge + host.radius, CREATED_SPELL_SPACING, host.radius, func(at: Vector2) -> bool:
+		return created.all(func(o: WorldObject) -> bool:
+			return o.dead or at.distance_to(o.pos) >= CREATED_SPELL_SPACING / 2.0))
+	if pos == Vector2.INF:
+		return  # no room; try again next tick
 	var paid := SpellGrammar.share(_inner)
 	for c in paid:
 		reserve[c] = maxf(0.0, reserve.get(c, 0.0) - paid[c])
-	var pos := host.pos + _dir * (_edge + host.radius + created.size() * CREATED_SPELL_SPACING)
 	what = sim.start_spell(_inner, caster, pos, inner_fuel, inner_reserve, pos + _dir * 100.0, false, chosen)
 	created.append(what)
 	_spell_timer = 0
@@ -152,10 +187,11 @@ func tick(sim: Simulation) -> bool:
 				if _spell_timer >= CREATE_SPELL_TICKS:
 					_create_spell(sim)
 				return true
-			if what.dead or _build >= 1.0:
+			if _building == null or _building.dead or _build >= 1.0:
 				_start_object(sim)
-			_build = minf(1.0, _build + _build_step)
-			what.radius = maxf(2.0, _full_radius * _build)
+			if _building != null:
+				_build = minf(1.0, _build + _build_step)
+				_building.radius = maxf(2.0, _full_radius * _build)
 			if _lifetime > 0:
 				for o in created:
 					o.lifetime = _lifetime  # sustained: none expire while the spell lasts

@@ -16,7 +16,8 @@ func _init() -> void:
 		"test_spell_absorbs_mana", "test_invalid_created_spell", "test_infinite_mana",
 		"test_inventory", "test_chosen_noun", "test_target_of_selector", "test_target_of_move",
 		"test_target_of_create", "test_target_of_nests", "test_target_of_non_spell",
-		"test_create_spell_makes_several", "test_moves_combine", "test_create_sustains_its_objects", "test_create_keeps_creating", "test_spells_last_longer",
+		"test_create_refills_gaps", "test_create_skips_obstacles", "test_create_waits_for_space",
+		"test_create_spell_refills_gaps", "test_create_spell_makes_several", "test_moves_combine", "test_create_sustains_its_objects", "test_create_keeps_creating", "test_spells_last_longer",
 	]:
 		call(t)
 	print("FAILED: %d" % _failures if _failures else "All tests passed.")
@@ -405,6 +406,62 @@ func spell_world() -> Array:
 	var w := world()
 	w[1].tags["infinite_mana"] = true
 	return w
+
+
+## Builds `n` full objects with a Create Wood cast from `p` toward +x.
+func wood_line(sim: Simulation, p: WorldObject, n: int) -> WorldObject:
+	var maker := sim.cast(p, {"verb": "create", "what": {"material": "wood"}}, p.pos + Vector2(100, 0))
+	var ticks := ceili(Spell.CREATE_TICKS_PER_RADIUS * 22.0)
+	run(sim, n * ticks + 1)
+	return maker
+
+
+func test_create_refills_gaps() -> void:
+	var w := spell_world()
+	var sim: Simulation = w[0]
+	var p: WorldObject = w[1]
+	var maker := wood_line(sim, p, 3)
+	var first: WorldObject = maker.spell.created[0]
+	var first_at := first.pos
+	first.dead = true
+	run(sim, ceili(Spell.CREATE_TICKS_PER_RADIUS * 22.0) + 2)
+	var newest: WorldObject = maker.spell.created.back()
+	check(newest.pos.distance_to(first_at) < 0.5, "A gap nearer the caster is filled before going further")
+
+
+func test_create_skips_obstacles() -> void:
+	var w := spell_world()
+	var sim: Simulation = w[0]
+	var p: WorldObject = w[1]
+	# The second place on the line (x = 200 + 44 + 48 = 292) is taken by stone.
+	sim.spawn(Materials.make("stone", Vector2(292, 360)))
+	var maker := wood_line(sim, p, 2)
+	var made := maker.spell.created
+	check(made.size() == 2 and made[1].pos.x > 330, "Create skips a place something else occupies")
+
+
+func test_create_waits_for_space() -> void:
+	var w := spell_world()
+	var sim: Simulation = w[0]
+	var p: WorldObject = w[1]
+	p.pos = Vector2(1200, 360)  # one place between the caster and the arena's edge
+	var maker := wood_line(sim, p, 4)
+	check(maker.spell.created.size() == 1 and not maker.dead, "With the line full, Create waits instead of piling up")
+	maker.spell.created[0].dead = true
+	run(sim, 2)
+	check(maker.spell.created.size() == 2, "...and builds again once there is space")
+
+
+func test_create_spell_refills_gaps() -> void:
+	var w := spell_world()
+	var sim: Simulation = w[0]
+	var p: WorldObject = w[1]
+	var maker := sim.cast(p, {"verb": "create", "what": {"spell": {"verb": "select", "qualifier": "player"}}}, Vector2(800, 360))
+	var first: WorldObject = maker.spell.created[0]
+	var first_at := first.pos
+	first.health = 0
+	run(sim, Spell.CREATE_SPELL_TICKS + 1)
+	check(maker.spell.created[1].pos.distance_to(first_at) < 0.5, "A Create Spell line refills a gap too")
 
 
 func test_create_spell_makes_several() -> void:
