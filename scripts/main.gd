@@ -12,7 +12,7 @@ extends Node2D
 
 var sim: Simulation
 var player: WorldObject
-var slots: Array = Sandbox.PRESETS.duplicate(true)
+var slots: Array = Spellbook.load_slots()  # saved when changed
 var selected := 0  # the slot cast last, highlighted in the HUD
 var _accum := 0.0
 var _pending_casts := []  # {"ast", "aim"} to send, one per tick, oldest first
@@ -29,7 +29,15 @@ func _ready() -> void:
 	quick.cast.connect(func(ast: Dictionary) -> void: _cast(ast, view.get_global_mouse_position(), -1))
 	quick.saved.connect(func(slot: int, ast: Dictionary) -> void:
 		slots[slot] = ast
+		Spellbook.save_slots(slots)
 		sim.say("Saved to spell %d: %s" % [(slot + 1) % 10, SpellGrammar.to_text(ast)]))
+	editor.visibility_changed.connect(func() -> void:
+		if not editor.visible:
+			Spellbook.save_slots(slots))
+	editor.reset_requested.connect(func() -> void:
+		slots.clear()
+		slots.append_array(Sandbox.PRESETS.duplicate(true))
+		editor.open(slots, selected))
 	picker.picked.connect(func(id: int) -> void:
 		if _dropping:
 			_dropping = false
@@ -107,6 +115,7 @@ func _begin_cast(aim: Vector2) -> void:
 func _cast(spell: Dictionary, aim: Vector2, slot: int) -> void:
 	if not _casting.is_empty():
 		return
+	hud.hide_hint()
 	# The spells of the slots an Alternate uses are copied in now, as they are.
 	var ast := SpellGrammar.embed_slots(spell, slots, [slot] if slot >= 0 else [])
 	var nouns := SpellGrammar.cast_picks(ast)

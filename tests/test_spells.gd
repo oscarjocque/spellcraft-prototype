@@ -1151,6 +1151,20 @@ func test_preview() -> void:
 		"...and nothing when it can't know before casting")
 
 
+func test_spellbook_saves() -> void:
+	var path := "user://test_spellbook.txt"
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+	check(Spellbook.load_slots(path) == Sandbox.PRESETS, "With nothing saved, the slots are the presets")
+	var slots: Array = Sandbox.PRESETS.duplicate(true)
+	slots[2] = SpellParser.parse("destroy all fires within 3 of there, up to 2")["ast"]
+	slots[4] = {"verb": "nonsense"}
+	Spellbook.save_slots(slots, path)
+	var loaded := Spellbook.load_slots(path)
+	check(loaded[2] == slots[2], "A saved spell comes back exactly")
+	check(loaded[4] == Sandbox.PRESETS[4], "A slot that isn't a spell falls back to its preset")
+	DirAccess.remove_absolute(ProjectSettings.globalize_path(path))
+
+
 func test_deterministic() -> void:
 	check(_replay() == _replay(), "Same inputs give the same world")
 

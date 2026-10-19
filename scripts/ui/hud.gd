@@ -7,6 +7,7 @@ var _bottom: RichTextLabel
 var _inventory: RichTextLabel
 var _prompt: RichTextLabel
 var _tip: RichTextLabel
+var _hint: RichTextLabel
 
 
 func _ready() -> void:
@@ -17,6 +18,11 @@ func _ready() -> void:
 	_prompt = _make_label(Vector2(340, 60))
 	_prompt.size.x = 600
 	_prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_hint = _make_label(Vector2(290, 120))
+	_hint.size.x = 700
+	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_hint.text = ("[color=#a7abb3]Press [b]Enter[/b] and type [color=#72de8f]move stone to me[/color], "
+			+ "or press a number key to cast a slot.\n[b]Tab[/b] opens your spellbook, [b]F1[/b] lists every word.[/color]")
 	_tip = _make_label(Vector2.ZERO)
 	_tip.size.x = 360
 
@@ -67,6 +73,11 @@ static func _show_text(label: RichTextLabel, text: String) -> void:
 func tooltip(bbcode: String, at: Vector2) -> void:
 	_show_text(_tip, bbcode)
 	_tip.position = at + Vector2(16, 12)
+
+
+## Hides the first-run hint (once the player has cast something).
+func hide_hint() -> void:
+	_hint.visible = false
 
 
 ## Hides the slot list and inventory (under the spellbook, which shows them).

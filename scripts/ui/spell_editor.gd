@@ -5,6 +5,8 @@ extends PanelContainer
 ## clicking its words; either way the slot changes as soon as it reads as a
 ## spell. Number keys choose a slot while nothing is being typed.
 
+signal reset_requested  # the player asked for the preset spells back
+
 var slots: Array = []  # shared with Main; edited in place
 
 var _rows: VBoxContainer
@@ -49,6 +51,11 @@ func _ready() -> void:
 	_input = SpellInput.new()
 	_input.compact = true
 	detail.add_child(_input)
+	_input.field.select_all_on_focus = true  # typing replaces the spell
+	_input.field.focus_exited.connect(func() -> void:
+		# Leaving half a spell behind puts the slot's text back.
+		if not _input.result.has("ast"):
+			_input.set_text(SpellGrammar.to_text(slots[_selected])))
 	_input.changed.connect(_on_typed)
 	_input.submitted.connect(func(_ast: Dictionary) -> void: _input.field.release_focus())
 	_chips = SpellChips.new()
@@ -68,6 +75,15 @@ func _ready() -> void:
 	tip.autowrap_mode = TextServer.AUTOWRAP_WORD
 	tip.custom_minimum_size.x = 620
 	detail.add_child(tip)
+	var reset := Button.new()
+	reset.text = "Reset all ten to the presets"
+	reset.flat = true
+	reset.focus_mode = Control.FOCUS_NONE
+	reset.add_theme_font_size_override("font_size", 12)
+	reset.add_theme_color_override("font_color", Color("8a8f98"))
+	reset.size_flags_horizontal = Control.SIZE_SHRINK_END
+	reset.pressed.connect(func() -> void: reset_requested.emit())
+	detail.add_child(reset)
 
 
 func open(p_slots: Array, slot := 0) -> void:
