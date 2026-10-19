@@ -2,8 +2,9 @@ class_name Spell
 extends RefCounted
 ## A cast spell. It lives on its own world object (the host) and performs its
 ## verb every tick until it reaches its goal, runs out of mana, or is destroyed.
-## Create has no goal once its object is built: it keeps sustaining the object
-## (fire doesn't burn out) until its mana runs out or the object is destroyed.
+## Create has no goal: it builds one object after another in a line along the
+## direction it was cast, sustaining each finished one (fire doesn't burn out),
+## until its mana runs out.
 ##
 ## Anchors: verb spells a player casts follow their caster. Independent
 ## selectors, and spells created by other spells, stay at their own point.
@@ -11,7 +12,8 @@ extends RefCounted
 ## Mana: `mana` is the spell's own fuel and drains every tick. `reserve` is
 ## earmarked for the spell it creates and is handed over when it does.
 
-const CREATE_TICKS_PER_RADIUS := 0.4  # bigger objects take longer to build
+const CREATE_TICKS_PER_RADIUS := 1.5  # bigger objects take longer to build
+const CREATE_SPACING := 4.0  # gap between objects in a Create line
 const DESTROY_RATE := 100.0  # health per second
 const MOVE_SPEED := 140.0  # pixels per second
 
@@ -21,7 +23,8 @@ var host: WorldObject
 var mana := {}  # color -> amount left
 var reserve := {}  # color -> amount carried for the spell this one creates
 var anchored := true  # follows its caster
-var what: WorldObject  # locked at cast
+var what: WorldObject  # locked at cast; for Create, the object being built
+var created: Array[WorldObject] = []  # every object this Create has made
 var to: WorldObject  # Move's destination, locked at cast
 var current: WorldObject  # an independent selector's pick this tick
 var _what_follows := false  # `what` is a selector this spell follows
@@ -32,7 +35,9 @@ var _dir := Vector2.RIGHT  # the direction it was cast in
 var _build := 0.0
 var _build_step := 0.0
 var _full_radius := 0.0
-var _lifetime := -1  # the created object's full lifetime in ticks, -1 = none
+var _lifetime := -1  # a created object's full lifetime in ticks, -1 = none
+var _material := ""
+var _edge := 0.0  # distance from the host to where the Create line starts
 
 
 func _init(p_ast: Dictionary, p_caster: WorldObject, p_host: WorldObject, p_mana: Dictionary,
@@ -66,12 +71,11 @@ func on_cast(sim: Simulation, aim: Vector2) -> void:
 			if not inner.is_empty():
 				what = _create_spell(sim, inner, host.pos + _dir * (edge + host.radius))
 			else:
-				var material: String = ast["what"]["material"]
-				_full_radius = Materials.PROPS[material]["radius"]
-				what = sim.spawn(Materials.make(material, host.pos + _dir * (edge + _full_radius)))
-				what.radius = 2.0
-				_lifetime = what.lifetime
+				_material = ast["what"]["material"]
+				_full_radius = Materials.PROPS[_material]["radius"]
+				_edge = edge
 				_build_step = 1.0 / (CREATE_TICKS_PER_RADIUS * _full_radius)
+				_start_object(sim)
 		"destroy":
 			what = _resolve(ast["what"], sim)
 			_what_follows = _follows(ast["what"], what)
@@ -83,6 +87,16 @@ func on_cast(sim: Simulation, aim: Vector2) -> void:
 		"select":
 			current = sim.closest(host.pos, ast["qualifier"], [host])
 	caster.last_it = host if is_independent() else what
+
+
+## Starts building the next object of a Create line, just past the last one.
+func _start_object(sim: Simulation) -> void:
+	var along := _edge + _full_radius + created.size() * (2.0 * _full_radius + CREATE_SPACING)
+	what = sim.spawn(Materials.make(_material, host.pos + _dir * along))
+	what.radius = 2.0
+	_lifetime = what.lifetime
+	_build = 0.0
+	created.append(what)
 
 
 ## Starts `inner` at `pos`, paid entirely from this spell's reserve. The new
@@ -111,13 +125,15 @@ func tick(sim: Simulation) -> bool:
 
 	match ast["verb"]:
 		"create":
-			if what == null or what.dead or what.spell != null:
-				return false  # a created spell starts whole, so Create is done
-			if _build < 1.0:
-				_build = minf(1.0, _build + _build_step)
-				what.radius = maxf(2.0, _full_radius * _build)
-			elif _lifetime > 0:
-				what.lifetime = _lifetime  # sustained: it can't expire while the spell lasts
+			if _material == "":
+				return false  # a created spell starts whole, so Create Spell is done
+			if what.dead or _build >= 1.0:
+				_start_object(sim)
+			_build = minf(1.0, _build + _build_step)
+			what.radius = maxf(2.0, _full_radius * _build)
+			if _lifetime > 0:
+				for o in created:
+					o.lifetime = _lifetime  # sustained: none expire while the spell lasts
 			return true
 		"destroy":
 			var subject := target()

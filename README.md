@@ -120,7 +120,7 @@ answer for each so it can be playtested. Every value can be tuned through the
 constants at the top of each script.
 
 - **Create places its object in front of the caster**, toward the cursor, so it needs no Where.
-- **Create keeps running after its object is built**, sustaining it: while the spell lasts, fire doesn't burn out. It ends when its mana runs out or the object is destroyed. Created objects stay after that, though fire then burns out after 10 s.
+- **Create keeps creating until its mana runs out.** Each object is built in turn, just past the last one, in a line toward where it was cast: Create Wood grows a wall, Create Fire lays a trail. While the spell lasts it sustains everything it made, so fire doesn't burn out. Building takes about 1.5 s for wood and 1 s for fire. Created objects stay after the spell ends, though fire then burns out after 10 s.
 - **Mana storage is a limit per color** (30), and players start full. A cast infuses at most 10 of each color it needs.
 - **Every block drains 0.2 mana per second** of its color, so a typical spell runs for 25–50 s. Colors follow the design doc's first sketch, and Wood, Me, It and Mana have colors assigned here.
 - **Mana can be selected and moved but not created.** Create Mana would produce mana for less than it yields.

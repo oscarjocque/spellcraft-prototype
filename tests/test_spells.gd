@@ -14,7 +14,7 @@ func _init() -> void:
 		"test_payload", "test_create_spell_pays_from_reserve", "test_nested_create_spell",
 		"test_create_spell_needs_its_payload", "test_created_spell_stays_put",
 		"test_spell_absorbs_mana", "test_invalid_created_spell", "test_infinite_mana",
-		"test_create_sustains_its_object", "test_spells_last_longer",
+		"test_create_sustains_its_objects", "test_create_keeps_creating", "test_spells_last_longer",
 	]:
 		call(t)
 	print("FAILED: %d" % _failures if _failures else "All tests passed.")
@@ -55,9 +55,9 @@ func count(sim: Simulation, qualifier: String) -> int:
 func test_barrier() -> void:
 	var w := world()
 	var sim: Simulation = w[0]
-	sim.cast(w[1], {"verb": "create", "what": {"material": "wood"}}, Vector2(400, 360))
-	run(sim, 30)
-	var wood := sim.closest(Vector2(400, 360), "wood", [])
+	var host := sim.cast(w[1], {"verb": "create", "what": {"material": "wood"}}, Vector2(400, 360))
+	run(sim, 2 * Simulation.TICK_RATE)
+	var wood: WorldObject = host.spell.created[0]
 	check(wood != null and is_equal_approx(wood.radius, 22.0), "Create Wood builds a full-size wood object")
 	check(wood.pos.x > 200, "Create places the object toward the aim")
 	check(count(sim, "spell") == 1, "Create keeps going once the object is complete")
@@ -231,7 +231,7 @@ func test_nested_create_spell() -> void:
 	var inner: WorldObject = middle.spell.what
 	check(inner != null and same(inner.spell.mana, {"red": 24.0}), "Innermost spell is paid from the middle reserve")
 	run(sim, 20)
-	check(count(sim, "fire") == 1, "The innermost spell creates its fire")
+	check(count(sim, "fire") >= 1, "The innermost spell creates fire")
 
 
 func test_create_spell_needs_its_payload() -> void:
@@ -294,17 +294,36 @@ func test_infinite_mana() -> void:
 	check(same(child.spell.mana, {"violet": 24.0, "red": 12.0}), "Spells still get their usual mana and reserve")
 
 
-func test_create_sustains_its_object() -> void:
+func test_create_sustains_its_objects() -> void:
 	var w := world()
 	var sim: Simulation = w[0]
 	var p: WorldObject = w[1]
 	var host := sim.cast(p, {"verb": "create", "what": {"material": "fire"}}, Vector2(400, 360))
-	var fire: WorldObject = host.spell.what
+	var first: WorldObject = host.spell.created[0]
 	run(sim, 15 * Simulation.TICK_RATE)  # past fire's 10 s lifetime
-	check(not fire.dead and not host.dead, "Fire doesn't burn out while its Create spell lasts")
+	check(not first.dead and not host.dead, "Fire doesn't burn out while its Create spell lasts")
 	sim.cast(p, {"verb": "destroy", "what": {"closest": "fire"}}, Vector2.ZERO)
 	run(sim, 4)
-	check(fire.dead and host.dead, "Create ends when its object is destroyed")
+	check(first.dead and not host.dead, "Create keeps going when one of its objects is destroyed")
+
+
+func test_create_keeps_creating() -> void:
+	var w := world()
+	var sim: Simulation = w[0]
+	var p: WorldObject = w[1]
+	var host := sim.cast(p, {"verb": "create", "what": {"material": "wood"}}, Vector2(1000, 360))
+	run(sim, 5 * Simulation.TICK_RATE)
+	var made := host.spell.created
+	check(made.size() >= 3, "Create builds one object after another")
+	check(made.all(func(o: WorldObject) -> bool: return is_equal_approx(o.pos.y, 360.0)), "Objects form a line toward the aim")
+	check(made[1].pos.x > made[0].pos.x and made[2].pos.x > made[1].pos.x, "Each new object goes past the last")
+	check(is_equal_approx(made[0].radius, 22.0), "Earlier objects are complete")
+	check(p.last_it == made[0], "It is the first object created")
+	run(sim, 50 * Simulation.TICK_RATE)  # 10 red and 10 green at 0.2/s each last 50 s
+	check(host.dead, "Create ends when its mana runs out")
+	var count_at_end := count(sim, "wood")
+	run(sim, Simulation.TICK_RATE)
+	check(count(sim, "wood") == count_at_end, "Its objects stay after it ends")
 
 
 func test_spells_last_longer() -> void:
