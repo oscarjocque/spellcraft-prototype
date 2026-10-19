@@ -24,7 +24,7 @@ func _ready() -> void:
 	var box := VBoxContainer.new()
 	add_child(box)
 	var title := Label.new()
-	title.text = "Cast a spell   ·   Enter cast   ·   Ctrl+1–0 save to slot   ·   ↑↓ earlier spells   ·   Esc close"
+	title.text = "Cast a spell   ·   Enter cast   ·   Ctrl+1–0 save to slot   ·   ↑↓ earlier spells   ·   F1 words   ·   Esc close"
 	title.add_theme_font_size_override("font_size", 12)
 	title.add_theme_color_override("font_color", Color("8a8f98"))
 	box.add_child(title)

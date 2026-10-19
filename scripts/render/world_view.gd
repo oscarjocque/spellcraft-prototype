@@ -34,6 +34,8 @@ var alpha := 1.0  # 0..1 progress from the last tick to the next
 var preview := {}
 var preview_verb := ""
 
+var _spell_at := {}  # spell host -> where it's drawn this frame
+
 
 func _process(_delta: float) -> void:
 	queue_redraw()
@@ -43,6 +45,7 @@ func _draw() -> void:
 	draw_rect(Simulation.ARENA, BACKGROUND)
 	if sim == null:
 		return
+	_place_spells()
 	for o in sim.objects:
 		if o.spell != null:
 			_draw_spell(o)
@@ -110,14 +113,45 @@ func _draw_player(o: WorldObject) -> void:
 ## on: solid to its target, dashed to a Move destination.
 func _draw_spell(o: WorldObject) -> void:
 	var s := o.spell
-	var p := _p(o)
+	var p: Vector2 = _spell_at.get(o, _p(o))
 	var color: Color = VERB_COLOR[s.ast["verb"]]
+	if s.paused:
+		_draw_diamond(p, o.radius, Color(color, 0.35))  # waiting for its turn
+		return
 	var dest := s.destination()
 	for target in s.targets():
 		draw_line(p, _p(target), Color(color, 0.5), 1.5)
 		if dest != null:
 			draw_dashed_line(_p(target), _p(dest), Color(color, 0.5), 1.5, 6.0)
 	_draw_diamond(p, o.radius + 2, color)
+
+
+## Where each spell is drawn: spells attached to a player in a ring around
+## them, in inventory order, numbered for the local player as in the HUD;
+## spells an Alternate runs beside it. Others where they are.
+func _place_spells() -> void:
+	_spell_at.clear()
+	var attached := {}  # caster -> their attached spells, oldest first
+	for o in sim.objects:
+		if o.spell != null and o.spell.anchored and o.spell.parent == null and not o.dead:
+			if not attached.has(o.spell.caster):
+				attached[o.spell.caster] = []
+			attached[o.spell.caster].append(o)
+	var font := ThemeDB.fallback_font
+	for caster in attached:
+		var ring: Array = attached[caster]
+		var r: float = caster.radius + 13.0
+		for i in ring.size():
+			var at := _p(caster) + Vector2.from_angle(-PI / 2 + TAU * i / ring.size()) * r
+			_spell_at[ring[i]] = at
+			if caster.controller >= 0:
+				var label_at := _p(caster) + Vector2.from_angle(-PI / 2 + TAU * i / ring.size()) * (r + 11)
+				draw_string(font, label_at + Vector2(-4, 4), str(i + 1), HORIZONTAL_ALIGNMENT_LEFT, -1, 11,
+						Color(PLAYER_COLOR, 0.8))
+	for o in sim.objects:
+		if o.spell != null and o.spell.parent != null and _spell_at.has(o.spell.parent):
+			var side: float = 1.0 if o.spell.parent.spell.ast.get("first", {}).get("ref") == null else -1.0
+			_spell_at[o] = _spell_at[o.spell.parent] + Vector2(9.0 * side, 9.0)
 
 
 ## A place made by There: a small cross.

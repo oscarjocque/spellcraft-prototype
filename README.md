@@ -24,6 +24,7 @@ selector are enough to build spells that interact in ways nobody scripted.
 | Left click | While picking This or There, pick |
 | Esc | Cancel a cast that is waiting for picks, or close the typing bar |
 | Space | Drop one of your attached spells (pick it in a window) |
+| F1 | Show every word, colored by mana, with typed examples |
 | R | Reset the sandbox |
 
 ### Making spells fast

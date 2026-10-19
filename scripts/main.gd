@@ -8,6 +8,7 @@ extends Node2D
 @onready var editor: SpellEditor = $Hud/SpellEditor
 @onready var picker: ChosenPicker = $Hud/ChosenPicker
 @onready var quick: QuickCast = $Hud/QuickCast
+@onready var words: WordSheet = $Hud/WordSheet
 
 var sim: Simulation
 var player: WorldObject
@@ -181,6 +182,10 @@ func _object_at(at: Vector2) -> WorldObject:
 
 func _input(event: InputEvent) -> void:
 	if not (event is InputEventKey and event.pressed and not event.echo):
+		return
+	if event.keycode == KEY_F1:
+		words.toggle()  # even while typing
+		get_viewport().set_input_as_handled()
 		return
 	if get_viewport().gui_get_focus_owner() is LineEdit:
 		return  # typing: Tab completes, Enter submits

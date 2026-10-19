@@ -42,7 +42,7 @@ func refresh(sim: Simulation, player: WorldObject, slots: Array, selected: int, 
 		text += "%s%s  %s\n" % [mark, key, SpellText.bbcode(slots[i])]
 	for m in sim.messages:
 		text += "[color=#ff8a8a]%s[/color]\n" % m
-	text += "[color=#8a8f98]WASD move · 1–0 cast toward the mouse · Enter type a spell · Tab spellbook · Space drop a spell · R reset[/color]"
+	text += "[color=#8a8f98]WASD move · 1–0 cast toward the mouse · Enter type a spell · Tab spellbook · Space drop a spell · F1 words · R reset[/color]"
 	_bottom.text = text
 
 	var inv := "[b]Attached spells[/b]  [color=#8a8f98]Chosen picks from these[/color]\n"
