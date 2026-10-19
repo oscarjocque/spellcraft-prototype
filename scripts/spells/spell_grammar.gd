@@ -19,7 +19,7 @@ const MATERIALS := ["fire", "water", "wood", "stone"]
 const QUALIFIERS := ["fire", "water", "wood", "stone", "spell", "player", "mana"]
 const REFS := ["me", "it"]
 const COLORS := ["red", "blue", "green", "violet"]
-const CREATED_SPELL_SECONDS := 5.0  # how long a created spell's mana must last
+const CREATED_SPELL_SECONDS := 60.0  # how long a created spell's mana must last
 
 ## First sketch from the design doc, to be tuned.
 const BLOCK_COLOR := {
@@ -31,7 +31,7 @@ const BLOCK_COLOR := {
 }
 
 ## Mana per second each block drains while its spell is active.
-const DRAIN_PER_BLOCK := 1.0
+const DRAIN_PER_BLOCK := 0.2
 
 
 ## Every word of the spell, including the words of any spell it creates.

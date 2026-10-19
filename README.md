@@ -62,7 +62,7 @@ can itself be a Create Spell.
 
 - **The creator carries the mana up front.** Casting a spell that creates
   another takes, besides its own fuel, a *reserve*: enough to run the created
-  spell for 5 s, plus that spell's own reserve, and so on down. If storage
+  spell for 60 s, plus that spell's own reserve, and so on down. If storage
   can't cover the reserve, the cast fails.
 - **A created spell is paid from its creator's reserve**, never from the
   caster's storage. It keeps what it must carry for its own created spell as
@@ -120,9 +120,9 @@ answer for each so it can be playtested. Every value can be tuned through the
 constants at the top of each script.
 
 - **Create places its object in front of the caster**, toward the cursor, so it needs no Where.
-- **Created objects stay** after their Create spell ends. Fire burns out after 10 s.
+- **Create keeps running after its object is built**, sustaining it: while the spell lasts, fire doesn't burn out. It ends when its mana runs out or the object is destroyed. Created objects stay after that, though fire then burns out after 10 s.
 - **Mana storage is a limit per color** (30), and players start full. A cast infuses at most 10 of each color it needs.
-- **Every block drains 1 mana per second** of its color. Colors follow the design doc's first sketch, and Wood, Me, It and Mana have colors assigned here.
+- **Every block drains 0.2 mana per second** of its color, so a typical spell runs for 25–50 s. Colors follow the design doc's first sketch, and Wood, Me, It and Mana have colors assigned here.
 - **Mana can be selected and moved but not created.** Create Mana would produce mana for less than it yields.
 - **Mana crystals regrow:** one random crystal appears every 3 s, up to 12 in the world.
 - **A selector picks one object**, the closest. An independent selector sits where it was cast (the cursor) and can feed any number of spells through "It".

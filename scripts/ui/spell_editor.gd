@@ -164,7 +164,7 @@ func _cost_text(ast: Dictionary) -> String:
 	var carries: Array[String] = []
 	for c in SpellGrammar.COLORS:
 		if drain.has(c):
-			drains.append("%s %d/s" % [c, drain[c]])
+			drains.append("%s %s/s" % [c, snappedf(drain[c], 0.01)])
 		if carry.has(c):
 			carries.append("%s %d" % [c, carry[c]])
 	var text := "drains " + ", ".join(drains)

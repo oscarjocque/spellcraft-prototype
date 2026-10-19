@@ -2,6 +2,8 @@ class_name Spell
 extends RefCounted
 ## A cast spell. It lives on its own world object (the host) and performs its
 ## verb every tick until it reaches its goal, runs out of mana, or is destroyed.
+## Create has no goal once its object is built: it keeps sustaining the object
+## (fire doesn't burn out) until its mana runs out or the object is destroyed.
 ##
 ## Anchors: verb spells a player casts follow their caster. Independent
 ## selectors, and spells created by other spells, stay at their own point.
@@ -30,6 +32,7 @@ var _dir := Vector2.RIGHT  # the direction it was cast in
 var _build := 0.0
 var _build_step := 0.0
 var _full_radius := 0.0
+var _lifetime := -1  # the created object's full lifetime in ticks, -1 = none
 
 
 func _init(p_ast: Dictionary, p_caster: WorldObject, p_host: WorldObject, p_mana: Dictionary,
@@ -67,6 +70,7 @@ func on_cast(sim: Simulation, aim: Vector2) -> void:
 				_full_radius = Materials.PROPS[material]["radius"]
 				what = sim.spawn(Materials.make(material, host.pos + _dir * (edge + _full_radius)))
 				what.radius = 2.0
+				_lifetime = what.lifetime
 				_build_step = 1.0 / (CREATE_TICKS_PER_RADIUS * _full_radius)
 		"destroy":
 			what = _resolve(ast["what"], sim)
@@ -109,9 +113,12 @@ func tick(sim: Simulation) -> bool:
 		"create":
 			if what == null or what.dead or what.spell != null:
 				return false  # a created spell starts whole, so Create is done
-			_build = minf(1.0, _build + _build_step)
-			what.radius = maxf(2.0, _full_radius * _build)
-			return _build < 1.0
+			if _build < 1.0:
+				_build = minf(1.0, _build + _build_step)
+				what.radius = maxf(2.0, _full_radius * _build)
+			elif _lifetime > 0:
+				what.lifetime = _lifetime  # sustained: it can't expire while the spell lasts
+			return true
 		"destroy":
 			var subject := target()
 			if subject == null:

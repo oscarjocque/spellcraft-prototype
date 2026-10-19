@@ -14,6 +14,7 @@ func _init() -> void:
 		"test_payload", "test_create_spell_pays_from_reserve", "test_nested_create_spell",
 		"test_create_spell_needs_its_payload", "test_created_spell_stays_put",
 		"test_spell_absorbs_mana", "test_invalid_created_spell", "test_infinite_mana",
+		"test_create_sustains_its_object", "test_spells_last_longer",
 	]:
 		call(t)
 	print("FAILED: %d" % _failures if _failures else "All tests passed.")
@@ -30,6 +31,16 @@ func world() -> Array:
 	var sim := Simulation.new()
 	var player := sim.spawn(Materials.make_player(Vector2(200, 360), 0))
 	return [sim, player]
+
+
+## Mana amounts are sums of 0.2s, so compare them approximately.
+func same(a: Dictionary, b: Dictionary) -> bool:
+	if a.size() != b.size():
+		return false
+	for k in b:
+		if not (a.has(k) and is_equal_approx(a[k], b[k])):
+			return false
+	return true
 
 
 func run(sim: Simulation, ticks: int) -> void:
@@ -49,7 +60,7 @@ func test_barrier() -> void:
 	var wood := sim.closest(Vector2(400, 360), "wood", [])
 	check(wood != null and is_equal_approx(wood.radius, 22.0), "Create Wood builds a full-size wood object")
 	check(wood.pos.x > 200, "Create places the object toward the aim")
-	check(count(sim, "spell") == 0, "Create ends once the object is complete")
+	check(count(sim, "spell") == 1, "Create keeps going once the object is complete")
 
 
 func test_extinguish_releases_mana() -> void:
@@ -178,10 +189,10 @@ const FIRE_WARDEN := {"verb": "create", "what": {"spell": {"verb": "destroy", "w
 
 
 func test_payload() -> void:
-	# The warden must carry 5 s of Destroy (Closest Fire): destroy + closest
-	# (violet) and fire (red).
-	check(SpellGrammar.payload(FIRE_WARDEN) == {"violet": 10.0, "red": 5.0}, "Payload covers the created spell")
-	check(SpellGrammar.drain_per_second(FIRE_WARDEN) == {"red": 1.0, "violet": 1.0}, "Creator drains only its own words")
+	# The warden must carry 60 s of Destroy (Closest Fire) at 0.2/s per word:
+	# destroy + closest (violet) and fire (red).
+	check(same(SpellGrammar.payload(FIRE_WARDEN), {"violet": 24.0, "red": 12.0}), "Payload covers the created spell")
+	check(same(SpellGrammar.drain_per_second(FIRE_WARDEN), {"red": 0.2, "violet": 0.2}), "Creator drains only its own words")
 	check(SpellGrammar.blocks(FIRE_WARDEN).size() == 5, "Words include the created spell's")
 	check(SpellGrammar.to_text(FIRE_WARDEN) == "Create Spell [Destroy (Closest Fire)].", "Created spell reads inside brackets")
 
@@ -192,12 +203,12 @@ func test_create_spell_pays_from_reserve() -> void:
 	var p: WorldObject = w[1]
 	sim.spawn(Materials.make("fire", Vector2(600, 200)))
 	var parent := sim.cast(p, FIRE_WARDEN, Vector2(400, 360))
-	# Storage pays the reserve (violet 10, red 5) and then up to 10 fuel per color.
-	check(is_equal_approx(p.mana_store["violet"], 10.0), "Caster pays the created spell's mana up front")
-	check(is_equal_approx(p.mana_store["red"], 15.0), "Caster pays the created spell's red mana up front")
+	# Storage pays the reserve (violet 24, red 12) and then up to 10 fuel per color.
+	check(is_equal_approx(p.mana_store["violet"], 0.0), "Caster pays the created spell's mana up front")
+	check(is_equal_approx(p.mana_store["red"], 8.0), "Caster pays the created spell's red mana up front")
 	var child: WorldObject = parent.spell.what
 	check(child != null and child.spell != null, "Create Spell puts a spell into the world")
-	check(child.spell.mana == {"violet": 10.0, "red": 5.0}, "The created spell's mana comes from the creator's reserve")
+	check(same(child.spell.mana, {"violet": 24.0, "red": 12.0}), "The created spell's mana comes from the creator's reserve")
 	check(parent.spell.reserve.is_empty(), "The reserve is handed over")
 	check(not child.spell.anchored and child.pos.x > p.pos.x, "The created spell sits in front of the caster")
 	check(p.last_it == child, "It refers to the created spell")
@@ -210,13 +221,15 @@ func test_nested_create_spell() -> void:
 	var sim: Simulation = w[0]
 	var p: WorldObject = w[1]
 	var ast := {"verb": "create", "what": {"spell": {"verb": "create", "what": {"spell": {"verb": "create", "what": {"material": "fire"}}}}}}
-	check(SpellGrammar.payload(ast) == {"red": 15.0, "violet": 5.0}, "Payload includes the created spell's own payload")
+	check(same(SpellGrammar.payload(ast), {"red": 36.0, "violet": 12.0}), "Payload includes the created spell's own payload")
+	for c in SpellGrammar.COLORS:
+		p.mana_store[c] = 100.0
 	var outer := sim.cast(p, ast, Vector2(600, 360))
 	var middle: WorldObject = outer.spell.what
-	check(middle.spell.mana == {"red": 5.0, "violet": 5.0}, "Middle spell keeps its fuel")
+	check(same(middle.spell.mana, {"red": 12.0, "violet": 12.0}), "Middle spell keeps its fuel")
 	check(middle.spell.reserve.is_empty(), "Middle spell hands its reserve on when it creates")
 	var inner: WorldObject = middle.spell.what
-	check(inner != null and inner.spell.mana == {"red": 10.0}, "Innermost spell is paid from the middle reserve")
+	check(inner != null and same(inner.spell.mana, {"red": 24.0}), "Innermost spell is paid from the middle reserve")
 	run(sim, 20)
 	check(count(sim, "fire") == 1, "The innermost spell creates its fire")
 
@@ -225,7 +238,7 @@ func test_create_spell_needs_its_payload() -> void:
 	var w := world()
 	var sim: Simulation = w[0]
 	var p: WorldObject = w[1]
-	p.mana_store["violet"] = 10.0  # 1 for the creator's drain + 10 reserve needed
+	p.mana_store["violet"] = 10.0  # 0.2 for the creator's drain + 24 reserve needed
 	check(sim.cast(p, FIRE_WARDEN, Vector2(400, 360)) == null, "Cast fails without the created spell's mana")
 	check(is_equal_approx(p.mana_store["violet"], 10.0), "A failed cast takes nothing")
 
@@ -278,7 +291,30 @@ func test_infinite_mana() -> void:
 	check(host != null, "Infinite mana casts with empty storage")
 	check(p.mana_store["violet"] == 0.0, "Infinite mana takes nothing from storage")
 	var child: WorldObject = host.spell.what
-	check(child.spell.mana == {"violet": 10.0, "red": 5.0}, "Spells still get their usual mana and reserve")
+	check(same(child.spell.mana, {"violet": 24.0, "red": 12.0}), "Spells still get their usual mana and reserve")
+
+
+func test_create_sustains_its_object() -> void:
+	var w := world()
+	var sim: Simulation = w[0]
+	var p: WorldObject = w[1]
+	var host := sim.cast(p, {"verb": "create", "what": {"material": "fire"}}, Vector2(400, 360))
+	var fire: WorldObject = host.spell.what
+	run(sim, 15 * Simulation.TICK_RATE)  # past fire's 10 s lifetime
+	check(not fire.dead and not host.dead, "Fire doesn't burn out while its Create spell lasts")
+	sim.cast(p, {"verb": "destroy", "what": {"closest": "fire"}}, Vector2.ZERO)
+	run(sim, 4)
+	check(fire.dead and host.dead, "Create ends when its object is destroyed")
+
+
+func test_spells_last_longer() -> void:
+	var w := world()
+	var sim: Simulation = w[0]
+	var host := sim.cast(w[1], {"verb": "select", "qualifier": "player"}, Vector2(600, 360))
+	run(sim, 20 * Simulation.TICK_RATE)
+	check(not host.dead, "A 2-word spell with 10 mana runs for 20 s")
+	run(sim, 6 * Simulation.TICK_RATE)
+	check(host.dead, "...and ends when its mana runs out, at 25 s")
 
 
 func test_deterministic() -> void:
