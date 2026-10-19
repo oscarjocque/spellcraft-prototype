@@ -48,7 +48,7 @@ it toward the mouse, or **click** where to cast it.
   read, colored by the mana each word costs, with its cost. The world rings
   what it would act on now, and a line says how much, or that it would wait.
 - **Repeat and keep.** **Enter** on the empty bar casts the last spell again;
-  **↑/↓** go through earlier ones. **Shift+Enter** casts and keeps the bar open
+  **↑/↓** go through earlier ones, kept between plays. **Shift+Enter** casts and keeps the bar open
   for the next, **Shift+click** keeps the spell ready to click onto more
   things, and **Ctrl+1–0** saves it to that slot.
 

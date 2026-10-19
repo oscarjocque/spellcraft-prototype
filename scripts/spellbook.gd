@@ -1,6 +1,9 @@
 class_name Spellbook
 extends RefCounted
-## The player's ten spell slots, kept on disk between plays.
+## The player's ten spell slots, and the spells they typed lately, kept on
+## disk between plays.
+
+const TYPED_KEPT := 50
 
 static var path := "user://spellbook.txt"  # tools can point it elsewhere
 
@@ -25,3 +28,22 @@ static func save_slots(slots: Array, to := "") -> void:
 	var file := FileAccess.open(to if to != "" else path, FileAccess.WRITE)
 	if file != null:
 		file.store_string(var_to_str(slots))
+
+
+## The spells typed lately, oldest first, as typed.
+static func load_typed() -> Array[String]:
+	var out: Array[String] = []
+	if FileAccess.file_exists(_typed_path()):
+		for line in FileAccess.get_file_as_string(_typed_path()).split("\n", false):
+			out.append(line)
+	return out
+
+
+static func save_typed(typed: Array[String]) -> void:
+	var file := FileAccess.open(_typed_path(), FileAccess.WRITE)
+	if file != null:
+		file.store_string("\n".join(typed.slice(-TYPED_KEPT)))
+
+
+static func _typed_path() -> String:
+	return path.get_basename() + "_typed.txt"

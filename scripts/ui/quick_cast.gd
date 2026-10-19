@@ -3,14 +3,14 @@ extends PanelContainer
 ## The quick-cast bar: Enter opens it, type a spell, Enter casts it toward the
 ## mouse (or click where to cast it). Enter on an empty bar casts the last one
 ## again. Ctrl+1–0 saves it to that slot instead, Up/Down go through spells
-## typed before, Esc closes.
+## typed before (in this play or earlier ones), Esc closes.
 
 signal cast(ast: Dictionary)
 signal saved(slot: int, ast: Dictionary)
 
 var input: SpellInput
 var _status: Label
-var _history: Array[String] = []
+var _history: Array[String] = Spellbook.load_typed()  # oldest first
 var _history_at := 0
 
 
@@ -72,6 +72,7 @@ func _place() -> void:
 func _remember(text: String) -> void:
 	_history.erase(text)
 	_history.append(text)
+	Spellbook.save_typed(_history)
 
 
 ## Casts what's typed, if it reads as a spell (a click on the world).

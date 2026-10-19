@@ -16,6 +16,7 @@ func _process(_delta: float) -> bool:
 
 ## Every test_ function, in the order they're written.
 func _run() -> void:
+	Spellbook.path = "user://test_spellbook.txt"  # leave the player's own alone
 	var tests: Array[String] = []
 	for m in get_script().get_script_method_list():
 		if m["name"].begins_with("test_") and not m["name"] in tests:
@@ -1246,6 +1247,10 @@ func test_quick_cast_keys() -> void:
 	quick._on_key(enter)
 	check(cast.size() == 2 and cast[1] == cast[0], "Enter on the empty bar casts the last spell again")
 	quick.free()
+	var next := QuickCast.new()
+	root.add_child(next)
+	check(next._history.back() == "de", "Typed spells are remembered for next time")
+	next.free()
 
 
 func test_cast_flow() -> void:
