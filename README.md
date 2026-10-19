@@ -60,7 +60,8 @@ the chosen one on the right, where you can type it the same way or click its
 words. Each word opens a menu of at most five choices (longer lists are split
 into submenus: Pick ▸ Closest, Farthest, Random, All), "+" adds optional parts
 (adjectives, "within", "up to", "at"), and optional parts have Remove.
-Clicking into the text selects it, so typing replaces the spell. Your ten
+Clicking into the text selects it, so typing replaces the spell, and
+**Ctrl+Z** undoes the last change (a bout of typing counts as one). Your ten
 slots are saved (in Godot's user folder) and come back next time; the
 spellbook's "Reset all ten to the presets" brings the presets back.
 

@@ -1307,3 +1307,24 @@ func test_parser_fuzz() -> void:
 			bad.append(text)
 	check(read > 15, "Random words sometimes read as spells (%d of 400)" % read)
 	check(bad.is_empty(), "Every spell read from random words is valid and reads back the same: %s" % [bad.slice(0, 3)])
+
+
+func test_spellbook_undo() -> void:
+	var editor := SpellEditor.new()
+	root.add_child(editor)
+	var slots: Array = Sandbox.PRESETS.duplicate(true)
+	editor.open(slots, 2)
+	var before: Dictionary = slots[2].duplicate(true)
+	editor._input.field.grab_focus()
+	for text in ["mo", "move st", "move stone to me"]:  # one bout of typing
+		editor._input.set_text(text)
+	editor._input.field.release_focus()
+	check(SpellGrammar.to_text(slots[2]) == "Move (Closest Stone) to Me.", "Typing changes the slot")
+	SpellChips._set_verb(slots[2], "mark")
+	editor._on_clicked_edit()
+	check(slots[2]["verb"] == "mark", "Clicking changes it too")
+	editor._undo_last()
+	check(SpellGrammar.to_text(slots[2]) == "Move (Closest Stone) to Me.", "Ctrl+Z undoes the click")
+	editor._undo_last()
+	check(slots[2] == before, "...and the whole bout of typing at once")
+	editor.free()

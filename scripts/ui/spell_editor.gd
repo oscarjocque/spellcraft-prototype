@@ -3,7 +3,8 @@ extends PanelContainer
 ## The spellbook: the ten spell slots on the left, the chosen one on the
 ## right. A spell is edited by typing it (as in the quick-cast bar) or by
 ## clicking its words; either way the slot changes as soon as it reads as a
-## spell. Number keys choose a slot while nothing is being typed.
+## spell. Number keys choose a slot while nothing is being typed, and Ctrl+Z
+## undoes the last change to a slot.
 
 signal reset_requested  # the player asked for the preset spells back
 
@@ -15,6 +16,9 @@ var _input: SpellInput
 var _chips: SpellChips
 var _summary: RichTextLabel
 var _selected := 0
+var _shown := {}  # a copy of the selected spell as last shown, to undo to
+var _undo := []  # [slot, spell before a change], oldest first
+var _typing_saved := false  # this bout of typing is one change: saved already
 
 
 func _ready() -> void:
@@ -29,7 +33,7 @@ func _ready() -> void:
 	page.add_theme_constant_override("separation", 10)
 	add_child(page)
 	var header := Label.new()
-	header.text = "Spellbook   ·   1–0 choose a spell   ·   type it, or click its words   ·   Tab close (the game is paused)"
+	header.text = "Spellbook   ·   1–0 choose a spell   ·   type it, or click its words   ·   Ctrl+Z undo   ·   Tab close (the game is paused)"
 	header.add_theme_color_override("font_color", Color("8a8f98"))
 	page.add_child(header)
 	var body := HBoxContainer.new()
@@ -57,6 +61,7 @@ func _ready() -> void:
 		if not _input.result.has("ast"):
 			_input.set_text(SpellGrammar.to_text(slots[_selected])))
 	_input.changed.connect(_on_typed)
+	_input.field.focus_entered.connect(func() -> void: _typing_saved = false)
 	_input.submitted.connect(func(_ast: Dictionary) -> void: _input.field.release_focus())
 	_chips = SpellChips.new()
 	_chips.custom_minimum_size.x = 620
@@ -88,6 +93,7 @@ func _ready() -> void:
 
 func open(p_slots: Array, slot := 0) -> void:
 	slots = p_slots
+	_undo.clear()
 	_build_rows()
 	_select(slot)
 	move_to_front()  # above the HUD's labels
@@ -105,7 +111,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	if not visible or not (event is InputEventKey and event.pressed and not event.echo):
 		return
 	var key: int = event.keycode
-	if key >= KEY_0 and key <= KEY_9:
+	if key == KEY_Z and event.ctrl_pressed:
+		_undo_last()
+		get_viewport().set_input_as_handled()
+	elif key >= KEY_0 and key <= KEY_9:
 		_select(9 if key == KEY_0 else key - KEY_1)
 		get_viewport().set_input_as_handled()
 	elif key == KEY_ENTER or key == KEY_KP_ENTER:
@@ -149,6 +158,8 @@ func _select(i: int) -> void:
 	if i < 0 or i >= slots.size():
 		return
 	_selected = i
+	_shown = {}
+	_typing_saved = false
 	_title.text = "Spell %d   (press %d in the game to cast it)" % [(i + 1) % 10, (i + 1) % 10]
 	_show_selected(true)
 
@@ -156,6 +167,11 @@ func _select(i: int) -> void:
 ## Shows the selected slot's spell; `retype` also puts its text in the box.
 func _show_selected(retype: bool) -> void:
 	var ast: Dictionary = slots[_selected]
+	if not _shown.is_empty() and _shown != ast:
+		if not (_typing_saved and _input.field.has_focus()):
+			_undo.append([_selected, _shown])
+		_typing_saved = _input.field.has_focus()
+	_shown = ast.duplicate(true)
 	if retype:
 		_input.set_text(SpellGrammar.to_text(ast))
 	_chips.show_spell(ast)
@@ -176,6 +192,17 @@ func _on_typed(result: Dictionary) -> void:
 	ast.clear()
 	ast.merge(result["ast"])
 	_show_selected(false)
+
+
+## Puts back the slot as it was before its last change.
+func _undo_last() -> void:
+	if _undo.is_empty():
+		return
+	var last: Array = _undo.pop_back()
+	var ast: Dictionary = slots[last[0]]
+	ast.clear()
+	ast.merge(last[1].duplicate(true))
+	_select(last[0])
 
 
 ## Clicking words changed the spell: show it as text too.
