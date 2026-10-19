@@ -7,6 +7,7 @@ extends Node2D
 @onready var hud: Hud = $Hud
 @onready var editor: SpellEditor = $Hud/SpellEditor
 @onready var picker: ChosenPicker = $Hud/ChosenPicker
+@onready var quick: QuickCast = $Hud/QuickCast
 
 var sim: Simulation
 var player: WorldObject
@@ -24,6 +25,10 @@ func _ready() -> void:
 	_bind("move_right", [KEY_D, KEY_RIGHT])
 	_bind("move_up", [KEY_W, KEY_UP])
 	_bind("move_down", [KEY_S, KEY_DOWN])
+	quick.cast.connect(func(ast: Dictionary) -> void: _cast(ast, view.get_global_mouse_position(), -1))
+	quick.saved.connect(func(slot: int, ast: Dictionary) -> void:
+		slots[slot] = ast
+		sim.say("Saved to spell %d: %s" % [(slot + 1) % 10, SpellGrammar.to_text(ast)]))
 	picker.picked.connect(func(id: int) -> void:
 		if _dropping:
 			_dropping = false
@@ -48,6 +53,7 @@ func _reset() -> void:
 	_dropping = false
 	_pending_drop = 0
 	picker.hide()
+	quick.close()
 
 
 func _process(delta: float) -> void:
@@ -62,8 +68,9 @@ func _process(delta: float) -> void:
 
 
 func _command() -> Dictionary:
+	var typing := get_viewport().gui_get_focus_owner() is LineEdit
 	var cmd := {
-		"move": Input.get_vector("move_left", "move_right", "move_up", "move_down"),
+		"move": Vector2.ZERO if typing else Input.get_vector("move_left", "move_right", "move_up", "move_down"),
 		"aim": view.get_global_mouse_position(),
 	}
 	if not _pending_cast.is_empty():
@@ -80,8 +87,15 @@ func _command() -> Dictionary:
 ## after another and while the game runs, what each Chosen, This and There
 ## in it means: Chosen from a window, This and There by clicking the world.
 func _begin_cast(aim: Vector2) -> void:
+	_cast(slots[selected], aim, selected)
+
+
+## Casts `spell` (from slot `slot`, or -1 if typed) toward `aim`, after its picks.
+func _cast(spell: Dictionary, aim: Vector2, slot: int) -> void:
+	if not _casting.is_empty():
+		return
 	# The spells of the slots an Alternate uses are copied in now, as they are.
-	var ast := SpellGrammar.embed_slots(slots[selected], slots, [selected])
+	var ast := SpellGrammar.embed_slots(spell, slots, [slot] if slot >= 0 else [])
 	var nouns := SpellGrammar.cast_picks(ast)
 	if nouns.is_empty():
 		_pending_cast = {"ast": ast, "aim": aim}
@@ -145,13 +159,20 @@ func _object_at(at: Vector2) -> WorldObject:
 
 
 func _input(event: InputEvent) -> void:
+	if not (event is InputEventKey and event.pressed and not event.echo):
+		return
+	if get_viewport().gui_get_focus_owner() is LineEdit:
+		return  # typing: Tab completes, Enter submits
 	# Handled here, before the editor's controls can take Tab for focus.
-	if event is InputEventKey and event.pressed and not event.echo and event.keycode == KEY_TAB \
-			and not picker.visible:
+	if event.keycode == KEY_TAB and not picker.visible:
 		if editor.visible:
 			editor.hide()
 		else:
 			editor.open(slots)
+		get_viewport().set_input_as_handled()
+	elif event.keycode in [KEY_ENTER, KEY_KP_ENTER] and not editor.visible and not picker.visible \
+			and _casting.is_empty():
+		quick.open()
 		get_viewport().set_input_as_handled()
 
 
