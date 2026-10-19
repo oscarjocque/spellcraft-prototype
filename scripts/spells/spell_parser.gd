@@ -10,8 +10,9 @@ extends RefCounted
 ## Any word can be cut to a prefix that fits where it stands ("mo" is Move
 ## at the start, Mine after Closest); when a prefix fits several words, the
 ## most common reading wins, and the canonical text shows which was meant.
-## Parentheses, brackets, commas, "of", "to" in "up to" and "m" in "3 m"
-## are optional, plurals are fine, and a noun on its own is a Hold.
+## Parentheses, brackets, commas, "of", "to" in "up to" and in Move, and
+## "m" in "3 m" are optional, plurals are fine, a thing on its own is the
+## closest one ("move stone to me"), and a noun on its own is a Hold.
 
 const VERB_WORDS := ["move", "create", "destroy", "mark", "hold", "alternate"]
 ## Noun words, most useful first: the order suggestions and ambiguous
@@ -113,6 +114,11 @@ func _note(i: int, options: Array) -> void:
 ## option it is a prefix of.
 func _word(i: int, options: Array) -> Array[String]:
 	_note(i, options)
+	return _match(i, options)
+
+
+## As _word, without noting the options as expected there.
+func _match(i: int, options: Array) -> Array[String]:
 	var out: Array[String] = []
 	if i >= _tokens.size():
 		return out
@@ -156,9 +162,11 @@ func _spell(i: int) -> Array:
 					out.append_array(_adverbs({"verb": verb, "what": n[0]}, n[1]))
 			"move":
 				for n in _noun(i + 1):
-					for to in _word(n[1], ["to"]):
-						for d in _noun(n[1] + 1):
-							out.append_array(_adverbs({"verb": "move", "what": n[0], "to": d[0]}, d[1]))
+					var k: int = n[1] + 1 if _is(n[1], "to") else n[1]
+					if k == n[1]:
+						_note(k, ["to"])
+					for d in _noun(k):
+						out.append_array(_adverbs({"verb": "move", "what": n[0], "to": d[0]}, d[1]))
 			"hold":
 				for n in _noun(i + 1):
 					out.append_array(_adverbs({"verb": "select", "what": n[0]}, n[1]))
@@ -241,6 +249,8 @@ func _noun(i: int) -> Array:
 			if _is(n[1], ")"):
 				out.append([n[0], n[1] + 1])
 		return out
+	# A thing on its own (with any adjectives) is the closest one.
+	out.append_array(_picked("closest", [], i, false))
 	for w in _word(i, NOUN_WORDS):
 		if w in SpellGrammar.REFS:
 			out.append([{"ref": w}, i + 1])
@@ -256,11 +266,15 @@ func _noun(i: int) -> Array:
 
 
 ## After a picker: adjectives, then the qualifier, then its options.
-func _picked(picker: String, adj: Array, i: int) -> Array:
+## `suggest_words` false: don't offer these words as suggestions (for the
+## implicit Closest, whose words are offered after Closest itself).
+func _picked(picker: String, adj: Array, i: int, suggest_words := true) -> Array:
 	var out := []
-	for w in _word(i, SpellGrammar.ADJECTIVES + QUALIFIER_WORDS):
+	var words: Array = SpellGrammar.ADJECTIVES + QUALIFIER_WORDS
+	var found := _word(i, words) if suggest_words else _match(i, words)
+	for w in found:
 		if w in SpellGrammar.ADJECTIVES and not w in adj and not w in QUALIFIER_WORDS:
-			out.append_array(_picked(picker, adj + [w], i + 1))
+			out.append_array(_picked(picker, adj + [w], i + 1, suggest_words))
 		elif w in QUALIFIER_WORDS:
 			var noun := {picker: w}
 			if not adj.is_empty():

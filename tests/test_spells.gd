@@ -1051,6 +1051,12 @@ func test_parse_typed() -> void:
 		"move closest stone to target of chosen": "Move (Closest Stone) to (Target of Chosen).",
 		"mark all moving mine things": "Mark (All Moving Mine Thing).",
 		"MOVE This to THERE.": "Move This to There.",
+		"move stone to me": "Move (Closest Stone) to Me.",
+		"move stone me": "Move (Closest Stone) to Me.",
+		"destroy fire": "Destroy (Closest Fire).",
+		"mark moving stones": "Mark (Closest Moving Stone).",
+		"move stone to player": "Move (Closest Stone) to (Closest Player).",
+		"move all stones within 2 of me to there": "Move (All Stone within 2 m of Me) to There.",
 	}
 	for typed in cases:
 		var r := SpellParser.parse(typed)
@@ -1065,7 +1071,7 @@ func test_parse_typed() -> void:
 func test_suggest() -> void:
 	check(SpellParser.suggest("").slice(0, 3) == ["move", "create", "destroy"], "An empty line suggests verbs first")
 	check(SpellParser.suggest("move closest st") == ["stone"], "A partial word suggests what it could be")
-	check(SpellParser.suggest("move closest stone ") == ["within", "to"], "After a picker: its options, then Move's to")
+	check(SpellParser.suggest("move closest stone ").slice(0, 2) == ["within", "to"], "After a picker: its options, then Move's to")
 	check(SpellParser.suggest("destroy closest fire ").has("up"), "A finished spell suggests adverbs")
 	check(SpellParser.suggest("create ") == ["fire", "water", "wood", "stone", "spell"], "Create suggests what to create")
 	check(SpellParser.suggest("move banana ").is_empty(), "Nothing fits after a mistake")

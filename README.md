@@ -30,9 +30,12 @@ selector are enough to build spells that interact in ways nobody scripted.
 
 **Type them.** Press **Enter**, type the spell, press **Enter** again: it's
 cast toward the mouse. Words can be cut to any prefix that fits where they
-stand, so `mo cl st to me` is `Move (Closest Stone) to Me`; parentheses,
-commas, "of" and "m" are optional, plurals are fine (`destroy all fires within
-3 of there, up to 2`), and a noun on its own holds it (`closest player`).
+stand, so `mo cl st to me` is `Move (Closest Stone) to Me`; a thing on its
+own means the closest one (`move stone me`, `destroy fire`); parentheses,
+commas, "of", "to" and "m" are optional, plurals are fine (`destroy all fires
+within 3 of there, up to 2`), and a noun on its own holds it (`closest player`).
+While the typed spell reads, the world rings what it would act on right now,
+and a line says how much, or that it would wait.
 While you type, up to five words that could come next are suggested (**Tab**
 takes the first) and the spell is shown as it's understood, colored by the
 mana each word costs, with its cost. **Ctrl+1–0** saves it to that slot
