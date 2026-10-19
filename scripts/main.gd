@@ -80,7 +80,8 @@ func _command() -> Dictionary:
 ## after another and while the game runs, what each Chosen, This and There
 ## in it means: Chosen from a window, This and There by clicking the world.
 func _begin_cast(aim: Vector2) -> void:
-	var ast: Dictionary = slots[selected].duplicate(true)
+	# The spells of the slots an Alternate uses are copied in now, as they are.
+	var ast := SpellGrammar.embed_slots(slots[selected], slots, [selected])
 	var nouns := SpellGrammar.cast_picks(ast)
 	if nouns.is_empty():
 		_pending_cast = {"ast": ast, "aim": aim}

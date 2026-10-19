@@ -59,7 +59,7 @@ func step(commands: Dictionary = {}) -> void:
 		if not o.dead and o.controller >= 0:
 			_control(o, commands.get(o.controller, {}))
 	for o in snapshot:
-		if not o.dead and o.spell != null and not o.spell.tick(self):
+		if not o.dead and o.spell != null and not o.spell.paused and not o.spell.tick(self):
 			o.dead = true
 
 	_integrate()

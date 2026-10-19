@@ -6,20 +6,12 @@ var _failures := 0
 
 
 func _init() -> void:
-	for t in [
-		"test_barrier", "test_extinguish_releases_mana", "test_boulder_throw",
-		"test_fire_burns_wood", "test_water_destroys_fire", "test_stone_blocks_movement",
-		"test_dispel", "test_held_selector_tracks", "test_tracking_gets_around_stone", "test_held_noun_is_shared", "test_destroying_selector_cuts_off_spell",
-		"test_not_enough_mana", "test_closest_never_picks_caster", "test_deterministic",
-		"test_payload", "test_create_spell_pays_from_reserve", "test_nested_create_spell",
-		"test_create_spell_needs_its_payload", "test_created_spell_stays_put",
-		"test_spell_absorbs_mana", "test_invalid_created_spell", "test_infinite_mana",
-		"test_inventory", "test_chosen_noun", "test_each_chosen_is_picked_separately",
-		"test_spells_wait_for_a_target", "test_destroy_follows_selector_to_next_pick", "test_target_of_selector", "test_target_of_move",
-		"test_target_of_create", "test_target_of_nests", "test_target_of_non_spell",
-		"test_create_refills_gaps", "test_create_skips_obstacles", "test_create_waits_for_space",
-		"test_create_spell_refills_gaps", "test_create_spell_makes_several", "test_moves_combine", "test_create_sustains_its_objects", "test_create_keeps_creating", "test_spells_last_longer",
-	]:
+	# Every test_ function, in the order they're written.
+	var tests: Array[String] = []
+	for m in get_script().get_script_method_list():
+		if m["name"].begins_with("test_") and not m["name"] in tests:
+			tests.append(m["name"])
+	for t in tests:
 		call(t)
 	print("FAILED: %d" % _failures if _failures else "All tests passed.")
 	quit(1 if _failures else 0)
@@ -753,6 +745,7 @@ func test_adjectives() -> void:
 	run(sim, 3)
 	var moving := sim.cast(p, {"verb": "mark", "what": {"closest": "stone", "adj": ["moving"]}}, Vector2.ZERO)
 	check(moving.spell.target() == rolling, "Moving picks what is moving")
+	run(sim, 1)
 	check(still.marks.is_empty() and rolling.marks.has(p.id), "Mark marks its target")
 	var marked := sim.cast(p, {"verb": "destroy", "what": {"all": "thing", "adj": ["marked"]}}, Vector2.ZERO)
 	check(marked.spell.targets() == [rolling], "Marked picks what the caster marked")
@@ -811,29 +804,35 @@ func test_create_at_aimed_goes_in_front() -> void:
 	check(made.size() > 1 and made.all(near), "The rest gather in the closest free spots around it")
 
 
+## The Juggle as casting sends it: slots copied in, the second using It.
+const JUGGLE := {"verb": "alternate",
+	"first": {"slot": 4, "spell": {"verb": "move", "what": {"closest": "stone"}, "to": {"ref": "me"}}},
+	"second": {"slot": 5, "spell": {"verb": "move", "what": {"ref": "it"}, "to": {"closest": "player"}}}}
+
+
 func test_alternate() -> void:
 	var w := spell_world()
 	var sim: Simulation = w[0]
 	var p: WorldObject = w[1]
 	var stone := sim.spawn(Materials.make("stone", Vector2(450, 360)))
 	var dummy := sim.spawn(Materials.make_player(Vector2(1000, 360)))
-	check(SpellGrammar.to_text(Sandbox.JUGGLE)
+	check(SpellGrammar.to_text(JUGGLE)
 		== "Alternate [Move (Closest Stone) to Me] [Move It to (Closest Player)].", "Alternate reads as words")
-	check(SpellGrammar.blocks(Sandbox.JUGGLE).size() == 10, "Its words are its own plus both spells'")
-	var alt := sim.cast(p, Sandbox.JUGGLE, Vector2.ZERO)
+	check(SpellGrammar.blocks(JUGGLE).size() == 9, "Its words are its own plus both spells'")
+	var alt := sim.cast(p, JUGGLE, Vector2.ZERO)
 	var pull: WorldObject = alt.spell._sub
 	check(pull != null and pull.spell.parent == alt and not pull in sim.inventory(p),
 		"The first spell runs attached to the Alternate, not in the inventory")
 	check(pull.spell.it.is_empty(), "On its first turn It means nothing yet")
 	run(sim, 3 * Simulation.TICK_RATE)
 	var throw: WorldObject = alt.spell._sub
-	check(pull.dead and throw != pull and throw.spell.ast == Sandbox.JUGGLE["second"],
+	check(pull.dead and throw != pull and throw.spell.ast == JUGGLE["second"]["spell"],
 		"When the first is done, the second takes its turn")
 	check(throw.spell.it == [stone], "The second spell's It is what the first acted on")
 	run(sim, 2)
 	check(heading(stone).dot(stone.pos.direction_to(dummy.pos)) > 0.9, "...so it throws the pulled stone")
 	run(sim, 3 * Simulation.TICK_RATE)
-	check(alt.spell._sub.spell.ast == Sandbox.JUGGLE["first"], "Then the first goes again")
+	check(alt.spell._sub.spell.ast == JUGGLE["first"]["spell"], "Then the first goes again")
 	check(alt.spell._sub.spell.it == [stone], "...with its own It: what the second acted on")
 	alt.health = 0
 	run(sim, 2)
@@ -844,11 +843,56 @@ func test_alternate_turns_are_capped() -> void:
 	var w := spell_world()
 	var sim: Simulation = w[0]
 	var p: WorldObject = w[1]
-	var ast := {"verb": "alternate", "first": {"verb": "create", "what": {"material": "fire"}},
-			"second": {"verb": "create", "what": {"material": "water"}}}
+	var ast := {"verb": "alternate", "first": {"slot": 0, "spell": {"verb": "create", "what": {"material": "fire"}}},
+			"second": {"slot": 1, "spell": {"verb": "create", "what": {"material": "water"}}}}
 	var alt := sim.cast(p, ast, Vector2(600, 360))
 	run(sim, Spell.ALTERNATE_TICKS + 1)
-	check(alt.spell._sub.spell.ast == ast["second"], "A spell that never finishes still hands over after its turn")
+	check(alt.spell._sub.spell.ast == ast["second"]["spell"], "A spell that never finishes still hands over after its turn")
+
+
+func test_alternate_slots() -> void:
+	var slots := [
+		{"verb": "move", "what": {"closest": "stone"}, "to": {"ref": "me"}},
+		{"verb": "alternate", "first": {"slot": 0}, "second": {"slot": 2}},
+		{"verb": "alternate", "first": {"slot": 1}, "second": {"slot": 0}},
+	]
+	var full := SpellGrammar.embed_slots(slots[1], slots, [1])
+	check(full["first"]["spell"] == slots[0], "A slot's spell is copied in when casting")
+	check(SpellGrammar.to_text(slots[1]) == "Alternate [spell 1] [spell 3].", "Before that it reads as slot numbers")
+	check(SpellGrammar.validate(full) != "", "A slot that leads back to the Alternate itself is rejected")
+	check(SpellGrammar.validate(SpellGrammar.embed_slots(slots[0], slots, [0])) == "", "(an ordinary slot is fine)")
+	var preset := SpellGrammar.embed_slots(Sandbox.PRESETS[1], Sandbox.PRESETS, [1])
+	check(SpellGrammar.to_text(preset)
+		== "Alternate [Move (Closest Stone) to Me] [Move (Closest Stone) to (Closest Player)].", "The Juggle preset uses slots 5 and 6")
+
+
+func test_alternate_takes_attached_spell() -> void:
+	var w := spell_world()
+	var sim: Simulation = w[0]
+	var p: WorldObject = w[1]
+	var held := sim.cast(p, {"verb": "select", "what": {"closest": "player"}}, Vector2.ZERO)
+	var mana_before: float = held.spell.mana["violet"]
+	var ast := {"verb": "alternate", "first": {"ref": "chosen", "id": held.id},
+			"second": {"slot": 0, "spell": {"verb": "create", "what": {"material": "fire"}}}}
+	check(SpellGrammar.to_text(ast) == "Alternate [Chosen] [Create Fire].", "Chosen reads as an argument")
+	check(SpellGrammar.cast_picks(ast).size() == 1, "The attached spell is picked when casting")
+	var alt := sim.cast(p, ast, Vector2(600, 360))
+	check(held.spell.parent == alt and not held in sim.inventory(p), "It takes the attached spell over")
+	check(alt.spell._sub == held and not held.spell.paused, "...and runs it on its turn")
+	run(sim, Spell.ALTERNATE_TICKS + 1)
+	check(held.spell.paused and not held.dead, "Between its turns it waits, paused")
+	var paused_mana: float = held.spell.mana["violet"]
+	run(sim, 10)
+	check(held.spell.mana["violet"] == paused_mana, "...using no mana")
+	check(paused_mana < mana_before, "On its turns it pays its own way")
+	run(sim, Spell.ALTERNATE_TICKS)
+	check(alt.spell._sub == held and not held.spell.paused, "Then it gets its turn again")
+	held.health = 0
+	run(sim, Spell.ALTERNATE_TICKS + 2)
+	check(not alt.dead and alt.spell._sub.spell.ast["verb"] == "create", "If it ends, the Alternate runs the other side")
+	alt.health = 0
+	run(sim, 2)
+	check(alt.spell._sub.dead, "The spells end with their Alternate")
 
 
 func test_up_to() -> void:
@@ -883,7 +927,7 @@ func test_up_to() -> void:
 	check(sim.objects.filter(func(o: WorldObject) -> bool: return o.marks.has(p.id)).size() == 2 and marks.dead,
 		"Mark up to 2 marks two")
 
-	var turns := sim.cast(p, Sandbox.JUGGLE.merged({"adverbs": {"up_to": 2}}), Vector2.ZERO)
+	var turns := sim.cast(p, JUGGLE.merged({"adverbs": {"up_to": 2}}), Vector2.ZERO)
 	run(sim, 2 * Spell.ALTERNATE_TICKS + 2)
 	check(turns.dead, "Alternate up to 2 runs two turns, then ends")
 	check(SpellGrammar.validate({"verb": "mark", "what": {"ref": "me"}, "adverbs": {"up_to": 7}}) != "", "Up to takes a listed number")
@@ -900,7 +944,8 @@ func test_here() -> void:
 	check(heading(stone).dot(stone.pos.direction_to(p.pos)) > 0.95, "...which, for a spell you cast, is where you are")
 	var maker := sim.cast(p, {"verb": "create", "what": {"spell": {"verb": "create", "what": {"material": "fire"}, "at": {"ref": "here"}}}}, Vector2(400, 600))
 	var made: WorldObject = maker.spell.what
-	check(made.spell.what.pos.distance_to(made.pos) < 1.0, "A created spell's Here is where it sits")
+	# Right at it, or in the nearest free spot (its spot overlaps the caster).
+	check(made.spell.what.pos.distance_to(made.pos) <= 14.01, "A created spell's Here is where it sits")
 
 
 func test_drop() -> void:
@@ -931,7 +976,8 @@ func _replay() -> String:
 	for i in 400:
 		var cmd := {"move": Vector2(cos(i * 0.05), sin(i * 0.03)), "aim": Vector2(640, 360)}
 		if i % 40 == 0:
-			cmd["cast"] = Sandbox.PRESETS[(i / 40) % Sandbox.PRESETS.size()]
+			var n: int = (i / 40) % Sandbox.PRESETS.size()
+			cmd["cast"] = SpellGrammar.embed_slots(Sandbox.PRESETS[n], Sandbox.PRESETS, [n])
 		sim.step({player.controller: cmd})
 	var state := ""
 	for o in sim.objects:

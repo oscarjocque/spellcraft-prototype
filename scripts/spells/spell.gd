@@ -14,9 +14,12 @@ extends RefCounted
 ## (Hold), which other spells can use through Chosen. Spells created by other
 ## spells stay at their own point.
 ##
-## Alternate runs its two spells attached to itself, one at a time, each turn
-## a fresh cast: it switches when the active one is done, or after
-## ALTERNATE_TICKS. Each spell's It is what the other acted on in its turn.
+## Alternate runs its two spells attached to itself, one at a time: a spell
+## from a slot is cast fresh each turn (and paid for by the Alternate); an
+## attached spell it took over keeps its own mana and is paused between its
+## turns. It switches when the running one is done, or after ALTERNATE_TICKS,
+## skipping a side that has nothing left to run. Each spell's It is what the
+## other acted on in its turn.
 ##
 ## Mana: `mana` is the spell's own fuel and drains every tick, once more for
 ## each extra target it acts on. `reserve` is earmarked for the spells it
@@ -36,7 +39,9 @@ var host: WorldObject
 var mana := {}  # color -> amount left
 var reserve := {}  # color -> amount carried for the spells this one creates
 var anchored := true  # follows its caster (through `parent`, if it has one)
-var parent: WorldObject  # the Alternate running this spell, which pays for it
+var parent: WorldObject  # the Alternate running this spell
+var paid_by_parent := false  # a spell an Alternate cast from a slot
+var paused := false  # an attached spell an Alternate took over, between its turns
 var it: Array[WorldObject] = []  # what the noun It means
 var what: WorldObject  # for Create: its newest product
 var created: Array[WorldObject] = []  # every object or spell this Create has made
@@ -68,6 +73,7 @@ var _sub: WorldObject  # Alternate: the spell running now
 var _turn := 0  # Alternate: 0 = first spell, 1 = second
 var _turn_ticks := 0
 var _last := [[], []]  # Alternate: what each spell last acted on
+var _taken: Array = [null, null]  # Alternate: the attached spells it took over
 
 
 func _init(p_ast: Dictionary, p_caster: WorldObject, p_host: WorldObject, p_mana: Dictionary,
@@ -120,7 +126,12 @@ func on_cast(sim: Simulation, aim: Vector2) -> void:
 				_what = _bind(noun, sim)
 			current = _hold(sim)
 		"alternate":
-			_start_turn(sim)
+			for i in 2:
+				var arg: Dictionary = ast["first" if i == 0 else "second"]
+				if arg.get("ref", "") == "chosen":
+					_taken[i] = _take(sim, arg.get("id", 0))
+			_turn = 1  # so the first turn tried is the first spell's
+			_next_turn(sim)
 
 
 ## Runs every tick. Returns false once the spell has ended.
@@ -174,9 +185,9 @@ func tick(sim: Simulation) -> bool:
 
 
 ## Takes `times` ticks' worth of drain; false if the mana isn't there. A spell
-## an Alternate runs is paid for by the Alternate.
+## an Alternate cast from a slot is paid for by the Alternate.
 func _pay(times: int) -> bool:
-	if times <= 0 or parent != null:
+	if times <= 0 or paid_by_parent:
 		return true
 	for c in _drain:
 		if mana.get(c, 0.0) < _drain[c] * times:
@@ -267,20 +278,57 @@ func _tick_alternate(sim: Simulation) -> bool:
 		_last[_turn] = _sub.spell.targets()
 		if _turn_ticks < ALTERNATE_TICKS:
 			return true
-		_sub.dead = true
-	# The turn is over: the other spell goes, its It what this one acted on,
-	# unless that was the last of its "up to" turns.
+		if _taken[_turn] == _sub:
+			_sub.spell.paused = true  # an attached spell waits for its next turn
+		else:
+			_sub.dead = true
+	# The turn is over: unless that was the last of its "up to" turns, the
+	# other spell goes, its It what this one acted on.
 	if _limit > 0 and _count >= _limit:
 		return false
-	_turn = 1 - _turn
-	_start_turn(sim)
-	return true
+	return _next_turn(sim)
 
 
-## Casts the spell whose turn it is, attached to this one, which pays for it.
-## A spell it creates is paid from this one's reserve while that lasts.
+## Starts the other side's turn, or this side's again if the other has
+## nothing to run; false if neither has.
+func _next_turn(sim: Simulation) -> bool:
+	for side in [1 - _turn, _turn]:
+		var arg: Dictionary = ast["first" if side == 0 else "second"]
+		var taken: WorldObject = _taken[side]
+		if taken != null and not taken.dead:
+			_turn = side
+			_sub = taken
+			_sub.spell.paused = false
+			_sub.spell.it = _alive(_last[1 - side])
+		elif not SpellGrammar.arg_spell(arg).is_empty():
+			_turn = side
+			_start_turn(sim)
+		else:
+			continue
+		_turn_ticks = 0
+		_count += 1
+		return true
+	return false
+
+
+## Takes over one of the caster's attached spells: it now follows this
+## spell, leaves their inventory, waits paused for its turns, and ends with
+## this spell. Returns it, or null if `id` isn't one of their attached spells.
+func _take(sim: Simulation, id: int) -> WorldObject:
+	for o in sim.inventory(caster):
+		if o.id == id and o != host:
+			o.spell.parent = host
+			o.spell.paused = true
+			o.bound_to = host
+			return o
+	return null
+
+
+## Casts the spell from the slot whose turn it is, attached to this one,
+## which pays for it. A spell it creates is paid from this one's reserve
+## while that lasts.
 func _start_turn(sim: Simulation) -> void:
-	var sub: Dictionary = ast["first" if _turn == 0 else "second"]
+	var sub := SpellGrammar.arg_spell(ast["first" if _turn == 0 else "second"])
 	var sub_reserve := SpellGrammar.payload(sub)
 	for c in sub_reserve:
 		var take := minf(sub_reserve[c], reserve.get(c, 0.0))
@@ -290,8 +338,7 @@ func _start_turn(sim: Simulation) -> void:
 	_sub = sim.start_spell(sub, caster, host.pos, {}, sub_reserve, host.pos + _dir * 100.0, anchored,
 			host, host, it_now)
 	_sub.bound_to = host  # it ends with this spell
-	_turn_ticks = 0
-	_count += 1
+	_sub.spell.paid_by_parent = true
 
 
 ## What the spell acts on right now: a held noun's value, Create's newest

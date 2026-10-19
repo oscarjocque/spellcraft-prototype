@@ -34,7 +34,7 @@ diamonds to collect mana.
 
 | Block family | In the prototype |
 | --- | --- |
-| Verbs | Create, Destroy, Move, Mark, Hold *(a noun on its own)*, Alternate [*spell*] [*spell*] |
+| Verbs | Create, Destroy, Move, Mark, Hold *(a noun on its own)*, Alternate [*slot or attached spell*] [*slot or attached spell*] |
 | Create's objects | Fire, Water, Wood, Stone, or Spell [*another spell*]; optionally *at (noun)*: right in front of it, then the closest free spots around |
 | Qualifiers | Thing *(any physical object)*, Fire, Water, Wood, Stone, Spell, Player, Mana |
 | Pickers | Closest, Farthest, Random, All |
@@ -49,11 +49,11 @@ The preset slots (keys 1–9 and 0):
 | Slot | Spell | Name |
 | --- | --- | --- |
 | 1 | Create Fire. | |
-| 2 | Alternate [Move (Closest Stone) to Me] [Move It to (Closest Player)]. | Juggle |
+| 2 | Alternate [spell 5] [spell 6]. | Juggle |
 | 3 | Create Wood. | Barrier |
 | 4 | Destroy (Closest Fire). | Extinguish |
-| 5 | Move (Closest Stone) to (Closest Player). | Boulder throw |
-| 6 | Destroy (Closest Spell). | Dispel |
+| 5 | Move (Closest Stone) to Me. | Pull |
+| 6 | Move (Closest Stone) to (Closest Player). | Boulder throw |
 | 7 + 8 | Hold (Closest Player), then Move (Closest Stone) to (Target of Chosen). | Live tracker |
 | 9 | Create Spell [Destroy (Closest Fire)]. | Fire warden |
 | 0 | Move This to There. | Telekinesis |
@@ -138,12 +138,22 @@ each new one.
 
 ### Alternate
 
-**Alternate** [*spell*] [*spell*] runs its two spells attached to itself, one
-at a time: each turn is a fresh cast, and it switches when the running spell
-is done, or after 3 s if it isn't. It pays for both and isn't done on its own;
-it ends when its mana runs out, and its spells end with it. With It, the two
-can pass a target back and forth: the Juggle pulls the closest stone to you,
-throws it at the closest player, then pulls a stone again.
+**Alternate** [*A*] [*B*] runs two spells attached to itself, one at a time,
+switching when the running one is done, or after 3 s if it isn't. Each side
+is either:
+
+- **a spell slot** (`spell 5`): the spell in that slot is copied in when you
+  cast, and cast fresh each turn, paid for by the Alternate. A slot that
+  leads back to the Alternate itself is rejected.
+- **an attached spell** (**Chosen**, picked when casting): the Alternate takes
+  it over. It leaves your inventory, runs only on its turns (paused, using no
+  mana, in between), keeps paying its own way, and ends with the Alternate.
+
+If one side has nothing left to run, the other keeps going; the Alternate
+ends when its mana runs out, or after its "up to" turns. Inside it, **It** is
+what the other side acted on in its last turn. The Juggle preset (slot 2) is
+`Alternate [spell 5] [spell 6]`: pull the closest stone to you, throw the
+closest stone at the closest player, and again.
 
 ### Spells wait for a target
 

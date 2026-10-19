@@ -9,7 +9,10 @@ extends RefCounted
 ##   {"verb": "move", "what": NOUN, "to": NOUN}
 ##   {"verb": "mark", "what": NOUN}
 ##   {"verb": "select", "what": NOUN}   # Hold: a noun on its own, re-read every tick
-##   {"verb": "alternate", "first": SPELL, "second": SPELL}
+##   {"verb": "alternate", "first": ARG, "second": ARG}
+##     ARG is {"slot": N}, one of the caster's spell slots (0-based), which is
+##     copied in as "spell" when casting (see embed_slots); or {"ref":
+##     "chosen"}, an attached spell, picked when casting, that it takes over.
 ##
 ## Any spell may also have adverbs: {"adverbs": {ADVERB: VALUE}}. So far:
 ##   "up_to": N   at most N: created, spells created, destroyed, moved,
@@ -102,8 +105,14 @@ static func relation_of(noun: Dictionary) -> String:
 static func blocks(ast: Dictionary) -> Array[String]:
 	if ast.get("verb", "") == "alternate":
 		var all: Array[String] = ["alternate"]
-		all.append_array(blocks(ast["first"]))
-		all.append_array(blocks(ast["second"]))
+		for arg in [ast["first"], ast["second"]]:
+			var sub := arg_spell(arg)
+			if not sub.is_empty():
+				all.append_array(blocks(sub))
+			elif arg.has("ref"):
+				all.append(arg["ref"])
+		for adverb in ast.get("adverbs", {}):
+			all.append(adverb)
 		return all
 	var out := own_blocks(ast)
 	var inner := created_spell(ast)
@@ -112,11 +121,48 @@ static func blocks(ast: Dictionary) -> Array[String]:
 	return out
 
 
-## The spells an Alternate runs, or [].
+## The spells an Alternate runs from its slots (not the attached spells it
+## takes over), or [].
 static func inner_spells(ast: Dictionary) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
 	if ast.get("verb", "") == "alternate":
-		return [ast["first"], ast["second"]]
-	return []
+		for arg in [ast["first"], ast["second"]]:
+			var sub := arg_spell(arg)
+			if not sub.is_empty():
+				out.append(sub)
+	return out
+
+
+## The spell an Alternate's argument runs, once its slot is copied in; {} if
+## none (an attached spell, or a slot not yet copied in).
+static func arg_spell(arg: Dictionary) -> Dictionary:
+	if arg.get("spell") is Dictionary:
+		return arg["spell"]
+	return {}
+
+
+## A copy of `ast` with the spells of every Alternate slot it uses copied in
+## from `slots`. A slot that leads back to a slot already being copied (in
+## `visiting`) is left out, so validate rejects it.
+static func embed_slots(ast: Dictionary, slots: Array, visiting: Array = []) -> Dictionary:
+	var copy := ast.duplicate(true)
+	_embed(copy, slots, visiting)
+	return copy
+
+
+static func _embed(ast: Dictionary, slots: Array, visiting: Array) -> void:
+	if ast.get("verb", "") == "alternate":
+		for key in ["first", "second"]:
+			var arg: Dictionary = ast[key]
+			if arg.has("slot"):
+				arg.erase("spell")
+				var n: int = arg["slot"]
+				if n >= 0 and n < slots.size() and not n in visiting:
+					arg["spell"] = slots[n].duplicate(true)
+					_embed(arg["spell"], slots, visiting + [n])
+	var inner := created_spell(ast)
+	if not inner.is_empty():
+		_embed(inner, slots, visiting)
 
 
 ## The words this spell pays for itself, without the spell it creates.
@@ -141,8 +187,12 @@ static func own_blocks(ast: Dictionary) -> Array[String]:
 		"alternate":
 			# It runs both spells, so it pays for both.
 			out.append("alternate")
-			out.append_array(own_blocks(ast["first"]))
-			out.append_array(own_blocks(ast["second"]))
+			for arg in [ast["first"], ast["second"]]:
+				var sub := arg_spell(arg)
+				if not sub.is_empty():
+					out.append_array(own_blocks(sub))
+				elif arg.has("ref"):
+					out.append(arg["ref"])
 	for adverb in ast.get("adverbs", {}):
 		out.append(adverb)
 	return out
@@ -246,9 +296,16 @@ static func validate(ast: Dictionary) -> String:
 				return "Hold needs something to hold."
 		"alternate":
 			for key in ["first", "second"]:
-				if not ast.get(key) is Dictionary:
+				var arg: Variant = ast.get(key)
+				if not arg is Dictionary:
 					return "Alternate needs two spells."
-				var err := validate(ast[key])
+				if arg.get("ref", "") == "chosen":
+					continue
+				if not arg.has("slot") or not arg["slot"] is int or arg["slot"] < 0 or arg["slot"] > 9:
+					return "Alternate takes a spell slot or an attached spell."
+				if not arg.get("spell") is Dictionary:
+					return "Alternate's spell %d is empty or leads back to itself." % ((arg["slot"] + 1) % 10)
+				var err := validate(arg["spell"])
 				if err != "":
 					return err
 		_:
@@ -285,8 +342,11 @@ static func cast_picks(ast: Dictionary) -> Array[Dictionary]:
 		"select":
 			_picks_in(held_noun(ast), out)
 		"alternate":
-			out.append_array(cast_picks(ast["first"]))
-			out.append_array(cast_picks(ast["second"]))
+			for arg in [ast["first"], ast["second"]]:
+				if arg.get("ref", "") == "chosen":
+					out.append(arg)
+				elif not arg_spell(arg).is_empty():
+					out.append_array(cast_picks(arg_spell(arg)))
 		_:
 			for key in ["what", "to"]:
 				if ast.get(key) is Dictionary:
@@ -334,7 +394,7 @@ static func _clause(ast: Dictionary) -> String:
 		"select":
 			return "Hold %s" % noun_text(held_noun(ast))
 		"alternate":
-			return "Alternate [%s] [%s]" % [_sentence(ast["first"]), _sentence(ast["second"])]
+			return "Alternate %s %s" % [_arg_text(ast["first"]), _arg_text(ast["second"])]
 	return "?"
 
 
@@ -356,3 +416,12 @@ static func noun_text(noun: Dictionary) -> String:
 	elif noun.get("from") is Dictionary:
 		words.append("to " + noun_text(noun["from"]))
 	return "(%s)" % " ".join(words)
+
+
+## An Alternate's argument: the spell copied in, else its slot, else Chosen.
+static func _arg_text(arg: Dictionary) -> String:
+	if not arg_spell(arg).is_empty():
+		return "[%s]" % _sentence(arg_spell(arg))
+	if arg.has("slot"):
+		return "[spell %d]" % ((arg["slot"] + 1) % 10)
+	return "[Chosen]"

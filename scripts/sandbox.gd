@@ -3,18 +3,14 @@ extends RefCounted
 ## The prototype's test arena: a player, a training dummy, and some of every
 ## material to try spells on.
 
-## Pull the nearest stone in, throw it at the nearest player, and again.
-const JUGGLE := {"verb": "alternate",
-	"first": {"verb": "move", "what": {"closest": "stone"}, "to": {"ref": "me"}},
-	"second": {"verb": "move", "what": {"ref": "it"}, "to": {"closest": "player"}}}
-
 const PRESETS := [
 	{"verb": "create", "what": {"material": "fire"}},
-	JUGGLE,
+	# Juggle: pull the nearest stone in (slot 5), throw it (slot 6), and again.
+	{"verb": "alternate", "first": {"slot": 4}, "second": {"slot": 5}},
 	{"verb": "create", "what": {"material": "wood"}},  # Barrier
 	{"verb": "destroy", "what": {"closest": "fire"}},  # Extinguish
+	{"verb": "move", "what": {"closest": "stone"}, "to": {"ref": "me"}},  # Pull
 	{"verb": "move", "what": {"closest": "stone"}, "to": {"closest": "player"}},  # Boulder throw
-	{"verb": "destroy", "what": {"closest": "spell"}},  # Dispel
 	{"verb": "select", "what": {"closest": "player"}},  # Live tracker, part 1: hold a selector
 	{"verb": "move", "what": {"closest": "stone"}, "to": {"target_of": {"ref": "chosen"}}},  # Live tracker, part 2
 	{"verb": "create", "what": {"spell": {"verb": "destroy", "what": {"closest": "fire"}}}},  # Fire warden

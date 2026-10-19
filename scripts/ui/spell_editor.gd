@@ -73,12 +73,13 @@ func _fill_slot(slot: VBoxContainer, i: int) -> void:
 	row.add_child(label)
 	_add_spell(row, ast, func() -> void: _fill_slot(slot, i))
 
-	var err := SpellGrammar.validate(ast)
+	var full := SpellGrammar.embed_slots(ast, slots, [i])  # as it would be cast
+	var err := SpellGrammar.validate(full)
 	var summary := _text("      " + err)
 	if err != "":
 		summary.add_theme_color_override("font_color", Color("ff8a8a"))
 	else:
-		summary.text = "      %d words · %s" % [SpellGrammar.blocks(ast).size(), _cost_text(ast)]
+		summary.text = "      %d words · %s" % [SpellGrammar.blocks(full).size(), _cost_text(full)]
 		summary.add_theme_color_override("font_color", Color("a0a4ab"))
 	summary.add_theme_font_size_override("font_size", 12)
 	slot.add_child(summary)
@@ -109,10 +110,26 @@ func _add_spell(row: Container, ast: Dictionary, refresh: Callable) -> void:
 			_add_noun(row, ast["to"], refresh)
 		"alternate":
 			for key in ["first", "second"]:
-				row.add_child(_text("["))
-				_add_spell(row, ast[key], refresh)
-				row.add_child(_text("]"))
+				row.add_child(_alternate_arg(ast[key], refresh))
 	_add_adverbs(row, ast, refresh)
+
+
+## An Alternate's argument: one of the spell slots, or an attached spell
+## (Chosen, picked when casting).
+func _alternate_arg(arg: Dictionary, refresh: Callable) -> OptionButton:
+	var options := []
+	for n in 10:
+		options.append("spell %d" % ((n + 1) % 10))
+	options.append("Chosen")
+	var picker := _picker(options, 10 if arg.has("ref") else arg.get("slot", 0))
+	picker.item_selected.connect(func(idx: int) -> void:
+		arg.clear()
+		if idx == 10:
+			arg["ref"] = "chosen"
+		else:
+			arg["slot"] = idx
+		refresh.call())
+	return picker
 
 
 ## The adverb picker: so far, an optional "up to N".
@@ -284,5 +301,5 @@ static func _default_for(verb: String) -> Dictionary:
 		"mark":
 			return {"verb": "mark", "what": {"ref": "this"}}
 		"alternate":
-			return Sandbox.JUGGLE.duplicate(true)
+			return {"verb": "alternate", "first": {"slot": 4}, "second": {"slot": 5}}
 	return {"verb": "select", "what": {"closest": "player"}}
