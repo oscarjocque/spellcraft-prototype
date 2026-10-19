@@ -47,8 +47,9 @@ func set_status(text: String) -> void:
 	_status.visible = text != ""
 
 
-func open() -> void:
-	input.set_text("")
+## Opens the bar with `text` in it (a slot's spell, to change before casting).
+func open(text := "") -> void:
+	input.set_text(text)
 	_history_at = _history.size()
 	if not _history.is_empty():
 		input.field.placeholder_text = "Enter: %s again   ·   ↑ earlier spells" % _history.back()

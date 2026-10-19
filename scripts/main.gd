@@ -243,7 +243,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		return
 	if event is InputEventKey and event.pressed and not event.echo:
 		var slot: int = 9 if event.keycode == KEY_0 else event.keycode - KEY_1
-		if slot >= 0 and slot < mini(slots.size(), 10):
+		if slot >= 0 and slot < mini(slots.size(), 10) and event.shift_pressed:
+			if not flow.busy() and not picker.visible:
+				quick.open(SpellGrammar.to_text(slots[slot]))  # to change it, then cast or save it
+		elif slot >= 0 and slot < mini(slots.size(), 10):
 			# A number key casts its slot toward the mouse right away.
 			if not flow.busy() and not picker.visible:
 				selected = slot

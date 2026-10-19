@@ -67,7 +67,7 @@ func refresh(sim: Simulation, player: WorldObject, slots: Array, selected: int, 
 	_notices = _notices.filter(func(n: Array) -> bool: return now - n[1] < MESSAGE_SECONDS * 1000)
 	for n in _notices:
 		text += "[color=#ffd34d]%s[/color]\n" % n[0]
-	text += "[color=#8a8f98]WASD move · 1–0 cast toward the mouse · Enter type a spell · Tab spellbook · Space drop a spell · F1 words · R reset[/color]"
+	text += "[color=#8a8f98]WASD move · 1–0 cast · Shift+1–0 change, then cast · Enter type a spell · Tab spellbook · Space drop · F1 words · R reset[/color]"
 	_show_text(_bottom, text)
 	# Grows up from the bottom as messages come and go.
 	_bottom.position.y = _bottom.get_viewport_rect().size.y - _bottom.get_content_height() - 8
