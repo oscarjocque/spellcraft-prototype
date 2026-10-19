@@ -30,6 +30,12 @@ static func on_contact(sim: Simulation, a: WorldObject, b: WorldObject) -> void:
 		if momentum >= IMPACT_MOMENTUM:
 			b.health -= momentum * IMPACT_DAMAGE
 
+	# A spell absorbs any mana it touches into its own fuel.
+	if a.spell != null and b.has_tag("mana") and not b.dead:
+		a.spell.mana[b.mana_color] = a.spell.mana.get(b.mana_color, 0.0) + b.mana_amount
+		b.mana_amount = 0.0
+		b.dead = true
+
 	# Collectors pick up mana until their storage for that color is full.
 	if a.has_tag("collector") and b.has_tag("mana") and not b.dead:
 		var have: float = a.mana_store.get(b.mana_color, 0.0)

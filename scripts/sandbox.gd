@@ -12,6 +12,7 @@ const PRESETS := [
 	{"verb": "destroy", "what": {"closest": "spell"}},  # Dispel
 	{"verb": "select", "qualifier": "player"},  # Live tracker, part 1
 	{"verb": "move", "what": {"closest": "stone"}, "to": {"ref": "it"}},  # Live tracker, part 2
+	{"verb": "create", "what": {"spell": {"verb": "destroy", "what": {"closest": "fire"}}}},  # Fire warden
 ]
 
 

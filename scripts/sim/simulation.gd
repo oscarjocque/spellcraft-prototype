@@ -82,25 +82,40 @@ func closest(from: Vector2, qualifier: String, exclude: Array) -> WorldObject:
 	return best
 
 
-## Validates a spell as the server would, infuses mana, and casts it.
+## Validates a spell as the server would, infuses mana, and casts it. A spell
+## that creates another spell also takes, as a reserve, all the mana that
+## spell will need.
 func cast(caster: WorldObject, ast: Dictionary, aim: Vector2) -> WorldObject:
 	var err := SpellGrammar.validate(ast)
 	if err != "":
 		say(err)
 		return null
 	var drain := SpellGrammar.drain_per_second(ast)
-	for c in drain:
-		if caster.mana_store.get(c, 0.0) < drain[c]:
+	var reserve := SpellGrammar.payload(ast)
+	for c in SpellGrammar.COLORS:
+		var need: float = drain.get(c, 0.0) + reserve.get(c, 0.0)
+		if caster.mana_store.get(c, 0.0) < need:
 			say("Not enough %s mana for: %s" % [c, SpellGrammar.to_text(ast)])
 			return null
-	var infused := {}
+	for c in reserve:
+		caster.mana_store[c] -= reserve[c]
+	var fuel := {}
 	for c in drain:
 		var amount := minf(caster.mana_store[c], INFUSE_CAP)
 		caster.mana_store[c] -= amount
-		infused[c] = amount
+		fuel[c] = amount
 
-	var host := spawn(Materials.make_spell_host(caster.pos))
-	host.spell = Spell.new(ast, caster, host, infused)
+	# An independent selector is placed at the aim; other spells follow the caster.
+	var independent: bool = ast["verb"] == "select"
+	return start_spell(ast, caster, aim if independent else caster.pos, fuel, reserve, aim, not independent)
+
+
+## Puts a spell into the world. Its mana is already paid: by a caster's
+## storage, or by the reserve of the spell that created it.
+func start_spell(ast: Dictionary, caster: WorldObject, pos: Vector2, fuel: Dictionary,
+		reserve: Dictionary, aim: Vector2, anchored: bool) -> WorldObject:
+	var host := spawn(Materials.make_spell_host(pos))
+	host.spell = Spell.new(ast, caster, host, fuel, reserve, anchored)
 	host.spell.on_cast(self, aim)
 	return host
 
@@ -210,12 +225,12 @@ func _cleanup() -> void:
 		spawn(m)
 
 
-## A spell that ends with mana left drops it back into the world.
+## A spell that ends with mana left, fuel or reserve, drops it into the world.
 func _release(host: WorldObject) -> Array[WorldObject]:
 	var out: Array[WorldObject] = []
 	var i := 0
 	for c in SpellGrammar.COLORS:
-		var amount: float = host.spell.mana.get(c, 0.0)
+		var amount: float = host.spell.mana.get(c, 0.0) + host.spell.reserve.get(c, 0.0)
 		if amount >= 0.5:
 			var offset := Vector2(10, 0).rotated(i * TAU / SpellGrammar.COLORS.size())
 			out.append(Materials.make_mana(c, amount, host.pos + offset))

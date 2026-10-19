@@ -29,7 +29,7 @@ func refresh(sim: Simulation, player: WorldObject, slots: Array, selected: int) 
 		text += ("[b][color=#ffd34d]> %s[/color][/b]" % line if i == selected else "   " + line) + "\n"
 	for m in sim.messages:
 		text += "[color=#ff8a8a]%s[/color]\n" % m
-	text += "[color=#8a8f98]WASD move · 1-8 pick spell · left click cast at cursor · Tab edit spells · R reset[/color]"
+	text += "[color=#8a8f98]WASD move · 1-9 pick spell · left click cast at cursor · Tab edit spells · R reset[/color]"
 	_bottom.text = text
 
 

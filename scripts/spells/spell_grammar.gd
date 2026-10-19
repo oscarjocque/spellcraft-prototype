@@ -4,24 +4,28 @@ extends RefCounted
 ## selector cast on its own as an independent spell.
 ##
 ##   {"verb": "create", "what": {"material": "wood"}}
+##   {"verb": "create", "what": {"spell": SPELL}}     # creates another spell
 ##   {"verb": "destroy", "what": NOUN}
 ##   {"verb": "move", "what": NOUN, "to": NOUN}
 ##   {"verb": "select", "qualifier": "player"}   # independent Closest selector
 ##
 ## NOUN is {"ref": "me"}, {"ref": "it"} or {"closest": QUALIFIER}.
-## Every block is one word and costs mana of one color.
+## Every block is one word and costs mana of one color. A created spell's words
+## count toward the slot limit, but it pays its own drain: the spell creating
+## it must carry that mana as a reserve (see `payload`).
 
 const VERBS := ["create", "destroy", "move", "select"]
 const MATERIALS := ["fire", "water", "wood", "stone"]
-const QUALIFIERS := ["fire", "water", "wood", "stone", "spell", "player"]
+const QUALIFIERS := ["fire", "water", "wood", "stone", "spell", "player", "mana"]
 const REFS := ["me", "it"]
 const COLORS := ["red", "blue", "green", "violet"]
 const SLOT_LIMIT := 6  # words per spell; grows with progression later
+const CREATED_SPELL_SECONDS := 5.0  # how long a created spell's mana must last
 
 ## First sketch from the design doc, to be tuned.
 const BLOCK_COLOR := {
 	"create": "red", "fire": "red",
-	"water": "blue",
+	"water": "blue", "mana": "blue",
 	"move": "green", "stone": "green", "wood": "green",
 	"destroy": "violet", "closest": "violet", "spell": "violet", "player": "violet",
 	"me": "violet", "it": "violet",
@@ -31,12 +35,22 @@ const BLOCK_COLOR := {
 const DRAIN_PER_BLOCK := 1.0
 
 
+## Every word of the spell, including the words of any spell it creates.
 static func blocks(ast: Dictionary) -> Array[String]:
+	var out := own_blocks(ast)
+	var inner := created_spell(ast)
+	if not inner.is_empty():
+		out.append_array(blocks(inner))
+	return out
+
+
+## The words this spell pays for itself, without the spell it creates.
+static func own_blocks(ast: Dictionary) -> Array[String]:
 	var out: Array[String] = []
 	match ast.get("verb", ""):
 		"create":
 			out.append("create")
-			out.append(ast["what"]["material"])
+			out.append("spell" if ast["what"].has("spell") else ast["what"]["material"])
 		"destroy":
 			out.append("destroy")
 			_noun_blocks(ast["what"], out)
@@ -58,21 +72,59 @@ static func _noun_blocks(noun: Dictionary, out: Array[String]) -> void:
 		out.append(noun["closest"])
 
 
+## The spell this one creates, or {} if it creates none.
+static func created_spell(ast: Dictionary) -> Dictionary:
+	if ast.get("verb", "") == "create" and ast["what"] is Dictionary and ast["what"].get("spell") is Dictionary:
+		return ast["what"]["spell"]
+	return {}
+
+
+## Mana per second this spell's own blocks drain while it is active.
 static func drain_per_second(ast: Dictionary) -> Dictionary:
 	var drain := {}
-	for b in blocks(ast):
+	for b in own_blocks(ast):
 		var c: String = BLOCK_COLOR[b]
 		drain[c] = drain.get(c, 0.0) + DRAIN_PER_BLOCK
 	return drain
 
 
+## Mana a spell must carry in reserve for the spell it creates: enough to run
+## that spell for CREATED_SPELL_SECONDS, plus that spell's own payload.
+static func payload(ast: Dictionary) -> Dictionary:
+	var inner := created_spell(ast)
+	if inner.is_empty():
+		return {}
+	var need := payload(inner)
+	var drain := drain_per_second(inner)
+	for c in drain:
+		need[c] = need.get(c, 0.0) + drain[c] * CREATED_SPELL_SECONDS
+	return need
+
+
 ## Returns "" if the spell is grammatical and fits the slot limit, else why not.
 static func validate(ast: Dictionary) -> String:
+	var err := _check(ast)
+	if err != "":
+		return err
+	var words := blocks(ast).size()
+	if words > SLOT_LIMIT:
+		return "Spell has %d words; the limit is %d." % [words, SLOT_LIMIT]
+	return ""
+
+
+static func _check(ast: Dictionary) -> String:
 	var verb: String = ast.get("verb", "")
 	match verb:
 		"create":
-			if not (ast.get("what") is Dictionary and ast["what"].get("material", "") in MATERIALS):
-				return "Create needs a material."
+			var what: Variant = ast.get("what")
+			if not what is Dictionary:
+				return "Create needs a material or a spell."
+			if what.has("spell"):
+				if not what["spell"] is Dictionary:
+					return "Create Spell needs a description of the spell."
+				return _check(what["spell"])
+			if not what.get("material", "") in MATERIALS:
+				return "Create needs a material or a spell."
 		"destroy":
 			if not _valid_noun(ast.get("what")):
 				return "Destroy needs something to destroy."
@@ -84,9 +136,6 @@ static func validate(ast: Dictionary) -> String:
 				return "Closest needs a qualifier."
 		_:
 			return "Unknown verb: %s" % verb
-	var words := blocks(ast).size()
-	if words > SLOT_LIMIT:
-		return "Spell has %d words; the limit is %d." % [words, SLOT_LIMIT]
 	return ""
 
 
@@ -99,15 +148,22 @@ static func _valid_noun(noun: Variant) -> bool:
 
 
 static func to_text(ast: Dictionary) -> String:
+	return _sentence(ast) + "."
+
+
+static func _sentence(ast: Dictionary) -> String:
 	match ast.get("verb", ""):
 		"create":
-			return "Create %s." % ast["what"]["material"].capitalize()
+			var inner := created_spell(ast)
+			if not inner.is_empty():
+				return "Create Spell [%s]" % _sentence(inner)
+			return "Create %s" % ast["what"]["material"].capitalize()
 		"destroy":
-			return "Destroy %s." % _noun_text(ast["what"])
+			return "Destroy %s" % _noun_text(ast["what"])
 		"move":
-			return "Move %s to %s." % [_noun_text(ast["what"]), _noun_text(ast["to"])]
+			return "Move %s to %s" % [_noun_text(ast["what"]), _noun_text(ast["to"])]
 		"select":
-			return "Closest %s (independent)." % ast["qualifier"].capitalize()
+			return "Closest %s (independent)" % ast["qualifier"].capitalize()
 	return "?"
 
 

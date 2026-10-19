@@ -11,6 +11,9 @@ func _init() -> void:
 		"test_fire_burns_wood", "test_water_destroys_fire", "test_stone_blocks_movement",
 		"test_dispel", "test_live_tracker", "test_destroying_selector_cuts_off_spell",
 		"test_not_enough_mana", "test_closest_never_picks_caster", "test_deterministic",
+		"test_payload", "test_create_spell_pays_from_reserve", "test_nested_create_spell",
+		"test_create_spell_needs_its_payload", "test_created_spell_stays_put",
+		"test_spell_absorbs_mana", "test_invalid_created_spell",
 	]:
 		call(t)
 	print("FAILED: %d" % _failures if _failures else "All tests passed.")
@@ -169,6 +172,98 @@ func test_closest_never_picks_caster() -> void:
 	var other := sim.spawn(Materials.make_player(Vector2(1000, 360)))
 	var host := sim.cast(p, {"verb": "destroy", "what": {"closest": "player"}}, Vector2.ZERO)
 	check(host.spell.what == other, "Closest Player cast by a player finds someone else")
+
+
+const FIRE_WARDEN := {"verb": "create", "what": {"spell": {"verb": "destroy", "what": {"closest": "fire"}}}}
+
+
+func test_payload() -> void:
+	# The warden must carry 5 s of Destroy (Closest Fire): destroy + closest
+	# (violet) and fire (red).
+	check(SpellGrammar.payload(FIRE_WARDEN) == {"violet": 10.0, "red": 5.0}, "Payload covers the created spell")
+	check(SpellGrammar.drain_per_second(FIRE_WARDEN) == {"red": 1.0, "violet": 1.0}, "Creator drains only its own words")
+	check(SpellGrammar.blocks(FIRE_WARDEN).size() == 5, "Created spell's words count toward the limit")
+	check(SpellGrammar.to_text(FIRE_WARDEN) == "Create Spell [Destroy (Closest Fire)].", "Created spell reads inside brackets")
+
+
+func test_create_spell_pays_from_reserve() -> void:
+	var w := world()
+	var sim: Simulation = w[0]
+	var p: WorldObject = w[1]
+	sim.spawn(Materials.make("fire", Vector2(600, 200)))
+	var parent := sim.cast(p, FIRE_WARDEN, Vector2(400, 360))
+	# Storage pays the reserve (violet 10, red 5) and then up to 10 fuel per color.
+	check(is_equal_approx(p.mana_store["violet"], 10.0), "Caster pays the created spell's mana up front")
+	check(is_equal_approx(p.mana_store["red"], 15.0), "Caster pays the created spell's red mana up front")
+	var child: WorldObject = parent.spell.what
+	check(child != null and child.spell != null, "Create Spell puts a spell into the world")
+	check(child.spell.mana == {"violet": 10.0, "red": 5.0}, "The created spell's mana comes from the creator's reserve")
+	check(parent.spell.reserve.is_empty(), "The reserve is handed over")
+	check(not child.spell.anchored and child.pos.x > p.pos.x, "The created spell sits in front of the caster")
+	check(p.last_it == child, "It refers to the created spell")
+	run(sim, 10)
+	check(count(sim, "fire") == 0, "The created spell does its job")
+
+
+func test_nested_create_spell() -> void:
+	var w := world()
+	var sim: Simulation = w[0]
+	var p: WorldObject = w[1]
+	var ast := {"verb": "create", "what": {"spell": {"verb": "create", "what": {"spell": {"verb": "create", "what": {"material": "fire"}}}}}}
+	check(SpellGrammar.payload(ast) == {"red": 15.0, "violet": 5.0}, "Payload includes the created spell's own payload")
+	var outer := sim.cast(p, ast, Vector2(600, 360))
+	var middle: WorldObject = outer.spell.what
+	check(middle.spell.mana == {"red": 5.0, "violet": 5.0}, "Middle spell keeps its fuel")
+	check(middle.spell.reserve.is_empty(), "Middle spell hands its reserve on when it creates")
+	var inner: WorldObject = middle.spell.what
+	check(inner != null and inner.spell.mana == {"red": 10.0}, "Innermost spell is paid from the middle reserve")
+	run(sim, 20)
+	check(count(sim, "fire") == 1, "The innermost spell creates its fire")
+
+
+func test_create_spell_needs_its_payload() -> void:
+	var w := world()
+	var sim: Simulation = w[0]
+	var p: WorldObject = w[1]
+	p.mana_store["violet"] = 10.0  # 1 for the creator's drain + 10 reserve needed
+	check(sim.cast(p, FIRE_WARDEN, Vector2(400, 360)) == null, "Cast fails without the created spell's mana")
+	check(is_equal_approx(p.mana_store["violet"], 10.0), "A failed cast takes nothing")
+
+
+func test_created_spell_stays_put() -> void:
+	var w := world()
+	var sim: Simulation = w[0]
+	var p: WorldObject = w[1]
+	var parent := sim.cast(p, {"verb": "create", "what": {"spell": {"verb": "select", "qualifier": "player"}}}, Vector2(400, 360))
+	var child: WorldObject = parent.spell.what
+	var at := child.pos
+	for i in 20:
+		sim.step({0: {"move": Vector2.DOWN}})
+	check(p.pos.y > 400 and child.pos == at, "A created spell stays where it was made")
+	check(child.spell.current == p, "A created spell is not anchored to the caster, so it can select them")
+
+
+func test_spell_absorbs_mana() -> void:
+	var w := world()
+	var sim: Simulation = w[0]
+	var p: WorldObject = w[1]
+	sim.spawn(Materials.make_player(Vector2(900, 360)))
+	var host := sim.cast(p, {"verb": "select", "qualifier": "player"}, Vector2(900, 300))
+	var crystal := sim.spawn(Materials.make_mana("blue", 5.0, Vector2(903, 300)))
+	var target := sim.spawn(Materials.make_mana("red", 5.0, Vector2(600, 600)))
+	run(sim, 1)
+	check(crystal.dead, "Mana touching a spell is absorbed")
+	check(is_equal_approx(host.spell.mana.get("blue", 0.0), 5.0), "Absorbed mana joins the spell's fuel")
+	check(sim.closest(Vector2(600, 600), "mana", []) == target, "Mana is a qualifier spells can select")
+
+
+func test_invalid_created_spell() -> void:
+	check(SpellGrammar.validate({"verb": "create", "what": {"spell": {"verb": "move", "what": {"ref": "me"}}}}) != "",
+		"Create Spell rejects an incomplete spell description")
+	check(SpellGrammar.validate({"verb": "create", "what": {"spell": "fireball"}}) != "",
+		"Create Spell needs the spell as a description")
+	var too_long := {"verb": "create", "what": {"spell": FIRE_WARDEN}}
+	check(SpellGrammar.validate(too_long) != "", "Nested words count toward the slot limit")
 
 
 func test_deterministic() -> void:

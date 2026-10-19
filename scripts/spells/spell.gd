@@ -3,8 +3,11 @@ extends RefCounted
 ## A cast spell. It lives on its own world object (the host) and performs its
 ## verb every tick until it reaches its goal, runs out of mana, or is destroyed.
 ##
-## Anchors: verb spells follow their caster; an independent selector stays at
-## the point it was cast and re-chooses every tick.
+## Anchors: verb spells a player casts follow their caster. Independent
+## selectors, and spells created by other spells, stay at their own point.
+##
+## Mana: `mana` is the spell's own fuel and drains every tick. `reserve` is
+## earmarked for the spell it creates and is handed over when it does.
 
 const CREATE_TICKS_PER_RADIUS := 0.4  # bigger objects take longer to build
 const DESTROY_RATE := 100.0  # health per second
@@ -14,6 +17,8 @@ var ast: Dictionary
 var caster: WorldObject
 var host: WorldObject
 var mana := {}  # color -> amount left
+var reserve := {}  # color -> amount carried for the spell this one creates
+var anchored := true  # follows its caster
 var what: WorldObject  # locked at cast
 var to: WorldObject  # Move's destination, locked at cast
 var current: WorldObject  # an independent selector's pick this tick
@@ -21,16 +26,20 @@ var _what_follows := false  # `what` is a selector this spell follows
 var _to_follows := false
 
 var _drain := {}  # color -> mana per tick
+var _dir := Vector2.RIGHT  # the direction it was cast in
 var _build := 0.0
 var _build_step := 0.0
 var _full_radius := 0.0
 
 
-func _init(p_ast: Dictionary, p_caster: WorldObject, p_host: WorldObject, p_mana: Dictionary) -> void:
+func _init(p_ast: Dictionary, p_caster: WorldObject, p_host: WorldObject, p_mana: Dictionary,
+		p_reserve: Dictionary, p_anchored: bool) -> void:
 	ast = p_ast
 	caster = p_caster
 	host = p_host
 	mana = p_mana
+	reserve = p_reserve
+	anchored = p_anchored
 	var per_second := SpellGrammar.drain_per_second(ast)
 	for c in per_second:
 		_drain[c] = per_second[c] / Simulation.TICK_RATE
@@ -43,17 +52,22 @@ func is_independent() -> bool:
 ## Runs once at cast. Selectors inside a spell choose now, and the verb keeps
 ## that choice for its whole life.
 func on_cast(sim: Simulation, aim: Vector2) -> void:
+	var dir := host.pos.direction_to(aim)
+	if dir != Vector2.ZERO:
+		_dir = dir
+	# Objects are created just outside whatever the spell is anchored to.
+	var edge := (caster.radius if anchored else host.radius) + 6.0
 	match ast["verb"]:
 		"create":
-			var dir := caster.pos.direction_to(aim)
-			if dir == Vector2.ZERO:
-				dir = Vector2.RIGHT
-			var material: String = ast["what"]["material"]
-			_full_radius = Materials.PROPS[material]["radius"]
-			var pos := caster.pos + dir * (caster.radius + _full_radius + 6.0)
-			what = sim.spawn(Materials.make(material, pos))
-			what.radius = 2.0
-			_build_step = 1.0 / (CREATE_TICKS_PER_RADIUS * _full_radius)
+			var inner := SpellGrammar.created_spell(ast)
+			if not inner.is_empty():
+				what = _create_spell(sim, inner, host.pos + _dir * (edge + host.radius))
+			else:
+				var material: String = ast["what"]["material"]
+				_full_radius = Materials.PROPS[material]["radius"]
+				what = sim.spawn(Materials.make(material, host.pos + _dir * (edge + _full_radius)))
+				what.radius = 2.0
+				_build_step = 1.0 / (CREATE_TICKS_PER_RADIUS * _full_radius)
 		"destroy":
 			what = _resolve(ast["what"], sim)
 			_what_follows = _follows(ast["what"], what)
@@ -63,14 +77,25 @@ func on_cast(sim: Simulation, aim: Vector2) -> void:
 			_what_follows = _follows(ast["what"], what)
 			_to_follows = _follows(ast["to"], to)
 		"select":
-			host.pos = aim
 			current = sim.closest(host.pos, ast["qualifier"], [host])
 	caster.last_it = host if is_independent() else what
 
 
+## Starts `inner` at `pos`, paid entirely from this spell's reserve. The new
+## spell keeps what it must carry for its own created spell as its reserve,
+## and burns the rest as fuel.
+func _create_spell(sim: Simulation, inner: Dictionary, pos: Vector2) -> WorldObject:
+	var inner_reserve := SpellGrammar.payload(inner)
+	var inner_fuel := {}
+	for c in reserve:
+		inner_fuel[c] = reserve[c] - inner_reserve.get(c, 0.0)
+	reserve = {}
+	return sim.start_spell(inner, caster, pos, inner_fuel, inner_reserve, pos + _dir * 100.0, false)
+
+
 ## Runs every tick. Returns false once the spell has ended.
 func tick(sim: Simulation) -> bool:
-	if not is_independent():
+	if anchored:
 		if caster.dead:
 			return false
 		host.pos = caster.pos
@@ -82,8 +107,8 @@ func tick(sim: Simulation) -> bool:
 
 	match ast["verb"]:
 		"create":
-			if what == null or what.dead:
-				return false
+			if what == null or what.dead or what.spell != null:
+				return false  # a created spell starts whole, so Create is done
 			_build = minf(1.0, _build + _build_step)
 			what.radius = maxf(2.0, _full_radius * _build)
 			return _build < 1.0
@@ -137,4 +162,5 @@ func _resolve(noun: Dictionary, sim: Simulation) -> WorldObject:
 		return caster if noun["ref"] == "me" else caster.last_it
 	# Closest is measured from the spell's location and never picks the object
 	# the spell is anchored to, so a caster never selects themselves.
-	return sim.closest(host.pos, noun["closest"], [host, caster])
+	var exclude := [host, caster] if anchored else [host]
+	return sim.closest(host.pos, noun["closest"], exclude)
