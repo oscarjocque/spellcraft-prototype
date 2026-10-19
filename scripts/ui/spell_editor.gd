@@ -1,52 +1,79 @@
 class_name SpellEditor
 extends PanelContainer
-## Edits the spell slots. Like Scratch's slots, each picker only offers blocks
-## that fit grammatically, so an incomplete spell can't be built. Choosing
-## Spell as Create's object opens a nested sentence for the spell to create,
-## and nouns that take another noun (Target of, "to", "at") open one too.
-##
-## A placeholder for a drag-and-drop block editor.
-
-## Noun kinds offered, in the noun picker's order.
-const NOUN_KINDS := ["me", "here", "it", "chosen", "this", "there", "aimed",
-		"closest", "farthest", "random", "all",
-		"target_of", "caster_of", "maker_of", "products_of"]
+## The spellbook: the ten spell slots on the left, the chosen one on the
+## right. A spell is edited by typing it (as in the quick-cast bar) or by
+## clicking its words; either way the slot changes as soon as it reads as a
+## spell. Number keys choose a slot while nothing is being typed.
 
 var slots: Array = []  # shared with Main; edited in place
 
 var _rows: VBoxContainer
+var _title: Label
+var _input: SpellInput
+var _chips: SpellChips
+var _summary: RichTextLabel
+var _selected := 0
 
 
 func _ready() -> void:
-	set_anchors_preset(Control.PRESET_CENTER)
 	var style := StyleBoxFlat.new()
 	style.bg_color = Color("15171c")
-	style.set_content_margin_all(12)
-	style.set_corner_radius_all(6)
+	style.border_color = Color("2c3038")
+	style.set_border_width_all(1)
+	style.set_content_margin_all(14)
+	style.set_corner_radius_all(8)
 	add_theme_stylebox_override("panel", style)
-	var box := VBoxContainer.new()
-	add_child(box)
-	var title := Label.new()
-	title.text = "Spell editor (simulation paused, Tab to close)"
-	box.add_child(title)
-	var scroll := ScrollContainer.new()
-	scroll.custom_minimum_size = Vector2(1120, 620)
-	scroll.horizontal_scroll_mode = ScrollContainer.SCROLL_MODE_DISABLED
-	box.add_child(scroll)
+	var page := VBoxContainer.new()
+	page.add_theme_constant_override("separation", 10)
+	add_child(page)
+	var header := Label.new()
+	header.text = "Spellbook   ·   1–0 choose a spell   ·   type it, or click its words   ·   Tab close (the game is paused)"
+	header.add_theme_color_override("font_color", Color("8a8f98"))
+	page.add_child(header)
+	var body := HBoxContainer.new()
+	body.add_theme_constant_override("separation", 18)
+	page.add_child(body)
+
 	_rows = VBoxContainer.new()
-	_rows.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	scroll.add_child(_rows)
+	_rows.custom_minimum_size.x = 420
+	_rows.add_theme_constant_override("separation", 2)
+	body.add_child(_rows)
+
+	var detail := VBoxContainer.new()
+	detail.custom_minimum_size = Vector2(620, 0)
+	detail.add_theme_constant_override("separation", 12)
+	body.add_child(detail)
+	_title = Label.new()
+	_title.add_theme_font_size_override("font_size", 18)
+	detail.add_child(_title)
+	_input = SpellInput.new()
+	_input.compact = true
+	detail.add_child(_input)
+	_input.changed.connect(_on_typed)
+	_input.submitted.connect(func(_ast: Dictionary) -> void: _input.field.release_focus())
+	_chips = SpellChips.new()
+	_chips.custom_minimum_size.x = 620
+	detail.add_child(_chips)
+	_chips.edited.connect(_on_clicked_edit)
+	_summary = RichTextLabel.new()
+	_summary.bbcode_enabled = true
+	_summary.fit_content = true
+	_summary.scroll_active = false
+	_summary.custom_minimum_size.x = 620
+	detail.add_child(_summary)
+	var tip := Label.new()
+	tip.text = "Click a word to change it; + adds optional parts. Colors show which mana each word costs."
+	tip.add_theme_font_size_override("font_size", 12)
+	tip.add_theme_color_override("font_color", Color("8a8f98"))
+	tip.autowrap_mode = TextServer.AUTOWRAP_WORD
+	tip.custom_minimum_size.x = 620
+	detail.add_child(tip)
 
 
-func open(p_slots: Array) -> void:
+func open(p_slots: Array, slot := 0) -> void:
 	slots = p_slots
-	for c in _rows.get_children():
-		_rows.remove_child(c)  # detach now; queue_free alone leaves it laid out this frame
-		c.queue_free()
-	for i in slots.size():
-		var slot := VBoxContainer.new()
-		_rows.add_child(slot)
-		_fill_slot(slot, i)
+	_build_rows()
+	_select(slot)
 	move_to_front()  # above the HUD's labels
 	show()
 	_recenter.call_deferred()
@@ -58,248 +85,83 @@ func _recenter() -> void:
 	position = ((get_viewport_rect().size - size) / 2).max(Vector2.ZERO)
 
 
-## One slot: the sentence's pickers (wrapping onto more lines as needed), with
-## its word count and cost below.
-func _fill_slot(slot: VBoxContainer, i: int) -> void:
-	for c in slot.get_children():
-		slot.remove_child(c)
+func _unhandled_input(event: InputEvent) -> void:
+	if not visible or not (event is InputEventKey and event.pressed and not event.echo):
+		return
+	var key: int = event.keycode
+	if key >= KEY_0 and key <= KEY_9:
+		_select(9 if key == KEY_0 else key - KEY_1)
+		get_viewport().set_input_as_handled()
+	elif key == KEY_ENTER or key == KEY_KP_ENTER:
+		_input.field.grab_focus()
+		get_viewport().set_input_as_handled()
+
+
+func _build_rows() -> void:
+	for c in _rows.get_children():
+		_rows.remove_child(c)
 		c.queue_free()
-	var ast: Dictionary = slots[i]
-	var row := HFlowContainer.new()
-	row.size_flags_horizontal = Control.SIZE_EXPAND_FILL
-	slot.add_child(row)
-	var label := _text("%d" % ((i + 1) % 10))
-	label.custom_minimum_size.x = 20
-	row.add_child(label)
-	_add_spell(row, ast, func() -> void: _fill_slot(slot, i))
+	var group := ButtonGroup.new()
+	for i in slots.size():
+		var row := Button.new()
+		row.toggle_mode = true
+		row.button_group = group
+		row.focus_mode = Control.FOCUS_NONE
+		row.custom_minimum_size = Vector2(420, 34)
+		row.pressed.connect(_select.bind(i))
+		var label := RichTextLabel.new()
+		label.bbcode_enabled = true
+		label.scroll_active = false
+		label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+		label.set_anchors_and_offsets_preset(Control.PRESET_FULL_RECT)
+		label.offset_left = 10
+		label.offset_top = 6
+		row.add_child(label)
+		_rows.add_child(row)
+	_refresh_rows()
 
-	var full := SpellGrammar.embed_slots(ast, slots, [i])  # as it would be cast
+
+func _refresh_rows() -> void:
+	for i in _rows.get_child_count():
+		var row: Button = _rows.get_child(i)
+		row.set_pressed_no_signal(i == _selected)
+		var label: RichTextLabel = row.get_child(0)
+		label.text = "[b]%d[/b]   %s" % [(i + 1) % 10, SpellText.bbcode(slots[i])]
+
+
+func _select(i: int) -> void:
+	if i < 0 or i >= slots.size():
+		return
+	_selected = i
+	_title.text = "Spell %d   (press %d in the game to cast it)" % [(i + 1) % 10, (i + 1) % 10]
+	_show_selected(true)
+
+
+## Shows the selected slot's spell; `retype` also puts its text in the box.
+func _show_selected(retype: bool) -> void:
+	var ast: Dictionary = slots[_selected]
+	if retype:
+		_input.set_text(SpellGrammar.to_text(ast))
+	_chips.show_spell(ast)
+	_refresh_rows()
+	var full := SpellGrammar.embed_slots(ast, slots, [_selected])  # as it would be cast
 	var err := SpellGrammar.validate(full)
-	var summary := _text("      " + err)
 	if err != "":
-		summary.add_theme_color_override("font_color", Color("ff8a8a"))
+		_summary.text = "[color=#ff8a8a]%s[/color]" % err
 	else:
-		summary.text = "      %d words · %s" % [SpellGrammar.blocks(full).size(), _cost_text(full)]
-		summary.add_theme_color_override("font_color", Color("a0a4ab"))
-	summary.add_theme_font_size_override("font_size", 12)
-	slot.add_child(summary)
+		_summary.text = "[color=#8a8f98]%d words · costs[/color]  %s" % [SpellGrammar.blocks(full).size(), SpellText.cost(full)]
 
 
-## The pickers for one sentence. Edits `ast` in place, so the same code edits a
-## slot's spell and any spell nested inside it by Create Spell.
-func _add_spell(row: Container, ast: Dictionary, refresh: Callable) -> void:
-	if ast["verb"] == "select" and not ast.has("what"):
-		ast["what"] = SpellGrammar.held_noun(ast)  # older form
-		ast.erase("qualifier")
-	var verbs := ["Create", "Destroy", "Move", "Mark", "Hold", "Alternate"]
-	var verb := _picker(verbs, SpellGrammar.VERBS.find(ast["verb"]))
-	verb.item_selected.connect(func(idx: int) -> void:
-		ast.clear()
-		ast.merge(_default_for(SpellGrammar.VERBS[idx]))
-		refresh.call())
-	row.add_child(verb)
-
-	match ast["verb"]:
-		"create":
-			_add_creation(row, ast, refresh)
-		"destroy", "mark", "select":
-			_add_noun(row, ast["what"], refresh)
-		"move":
-			_add_noun(row, ast["what"], refresh)
-			row.add_child(_text("to"))
-			_add_noun(row, ast["to"], refresh)
-		"alternate":
-			for key in ["first", "second"]:
-				row.add_child(_alternate_arg(ast[key], refresh))
-	_add_adverbs(row, ast, refresh)
+## Typing: once the text reads as a spell, it becomes the slot's spell.
+func _on_typed(result: Dictionary) -> void:
+	if not visible or not result.has("ast") or result["ast"] == slots[_selected]:
+		return
+	var ast: Dictionary = slots[_selected]
+	ast.clear()
+	ast.merge(result["ast"])
+	_show_selected(false)
 
 
-## An Alternate's argument: one of the spell slots, or an attached spell
-## (Chosen, picked when casting).
-func _alternate_arg(arg: Dictionary, refresh: Callable) -> OptionButton:
-	var options := []
-	for n in 10:
-		options.append("spell %d" % ((n + 1) % 10))
-	options.append("Chosen")
-	var picker := _picker(options, 10 if arg.has("ref") else arg.get("slot", 0))
-	picker.item_selected.connect(func(idx: int) -> void:
-		arg.clear()
-		if idx == 10:
-			arg["ref"] = "chosen"
-		else:
-			arg["slot"] = idx
-		refresh.call())
-	return picker
-
-
-## The adverb picker: so far, an optional "up to N".
-func _add_adverbs(row: Container, ast: Dictionary, refresh: Callable) -> void:
-	var options := ["no limit"] + SpellGrammar.UP_TO.map(func(n: int) -> String: return "up to %d" % n)
-	var limit := _picker(options, SpellGrammar.UP_TO.find(SpellGrammar.up_to(ast)) + 1)
-	limit.item_selected.connect(func(idx: int) -> void:
-		var adverbs: Dictionary = ast.get("adverbs", {})
-		if idx == 0:
-			adverbs.erase("up_to")
-		else:
-			adverbs["up_to"] = SpellGrammar.UP_TO[idx - 1]
-		if adverbs.is_empty():
-			ast.erase("adverbs")
-		else:
-			ast["adverbs"] = adverbs
-		refresh.call())
-	row.add_child(limit)
-
-
-## Create's object (a material, or Spell followed by that spell's
-## description), then optionally "at" a noun.
-func _add_creation(row: Container, ast: Dictionary, refresh: Callable) -> void:
-	var what: Dictionary = ast["what"]
-	var kinds: Array = SpellGrammar.MATERIALS + ["spell"]
-	var kind := _picker(kinds.map(func(w: String) -> String: return w.capitalize()),
-			kinds.find("spell" if what.has("spell") else what["material"]))
-	kind.item_selected.connect(func(idx: int) -> void:
-		what.clear()
-		if kinds[idx] == "spell":
-			what["spell"] = _default_for("create")
-		else:
-			what["material"] = kinds[idx]
-		refresh.call())
-	row.add_child(kind)
-	if what.has("spell"):
-		row.add_child(_text("["))
-		_add_spell(row, what["spell"], refresh)
-		row.add_child(_text("]"))
-	_add_optional_noun(row, ast, "at", ["in front of me", "at"], refresh)
-
-
-## A noun slot: a ref, a picker with its options, or a relation and its noun.
-func _add_noun(row: Container, noun: Dictionary, refresh: Callable) -> void:
-	var current: String = noun["ref"] if noun.has("ref") else SpellGrammar.picker_of(noun)
-	if current == "":
-		current = SpellGrammar.relation_of(noun)
-	var names: Array = NOUN_KINDS.map(func(k: String) -> String: return k.capitalize().replace(" Of", " of"))
-	var kind := _picker(names, NOUN_KINDS.find(current))
-	kind.item_selected.connect(func(idx: int) -> void:
-		var picked: String = NOUN_KINDS[idx]
-		var qualifier: String = noun.get(SpellGrammar.picker_of(noun), "stone")
-		noun.clear()
-		if picked in SpellGrammar.REFS:
-			noun["ref"] = picked
-		elif picked in SpellGrammar.PICKERS:
-			noun[picked] = qualifier
-		else:
-			noun[picked] = {"ref": "chosen"}
-		refresh.call())
-	row.add_child(kind)
-
-	var picker := SpellGrammar.picker_of(noun)
-	var rel := SpellGrammar.relation_of(noun)
-	if rel != "":
-		_add_noun(row, noun[rel], refresh)
-	elif picker != "":
-		_add_adjectives(row, noun, refresh)
-		row.add_child(_word_picker(SpellGrammar.QUALIFIERS, noun, picker, refresh))
-		var within := ["anywhere"] + SpellGrammar.DISTANCES.map(func(d: int) -> String: return "within %d m" % d)
-		var w := _picker(within, SpellGrammar.DISTANCES.find(noun.get("within", 0)) + 1)
-		w.item_selected.connect(func(idx: int) -> void:
-			if idx == 0:
-				noun.erase("within")
-			else:
-				noun["within"] = SpellGrammar.DISTANCES[idx - 1]
-			refresh.call())
-		row.add_child(w)
-		var measured := ["of the spell", "of"] if noun.has("within") else ["near the spell", "to"]
-		_add_optional_noun(row, noun, "from", measured, refresh)
-
-
-## A toggle between leaving `key` out (labels[0]) and a noun after labels[1].
-func _add_optional_noun(row: Container, owner: Dictionary, key: String, labels: Array, refresh: Callable) -> void:
-	var has := owner.get(key) is Dictionary
-	var toggle := _picker([labels[0], labels[1] + " …"], 1 if has else 0)
-	toggle.item_selected.connect(func(idx: int) -> void:
-		if idx == 0:
-			owner.erase(key)
-		else:
-			owner[key] = {"ref": "there"}
-		refresh.call())
-	row.add_child(toggle)
-	if has:
-		_add_noun(row, owner[key], refresh)
-
-
-## A menu of adjectives to tick on and off.
-func _add_adjectives(row: Container, noun: Dictionary, refresh: Callable) -> void:
-	var adj: Array = noun.get("adj", [])
-	var menu := MenuButton.new()
-	menu.flat = false
-	menu.text = " ".join(adj.map(func(a: String) -> String: return a.capitalize())) if not adj.is_empty() else "+ adjective"
-	var popup := menu.get_popup()
-	for i in SpellGrammar.ADJECTIVES.size():
-		popup.add_check_item(SpellGrammar.ADJECTIVES[i].capitalize(), i)
-		popup.set_item_checked(i, SpellGrammar.ADJECTIVES[i] in adj)
-	popup.id_pressed.connect(func(id: int) -> void:
-		var a: String = SpellGrammar.ADJECTIVES[id]
-		if a in adj:
-			adj.erase(a)
-		else:
-			adj.append(a)
-		if adj.is_empty():
-			noun.erase("adj")
-		else:
-			noun["adj"] = adj
-		refresh.call())
-	row.add_child(menu)
-
-
-func _word_picker(words: Array, target: Dictionary, key: String, refresh: Callable) -> OptionButton:
-	var names: Array = words.map(func(w: String) -> String: return w.capitalize())
-	var picker := _picker(names, words.find(target[key]))
-	picker.item_selected.connect(func(idx: int) -> void:
-		target[key] = words[idx]
-		refresh.call())
-	return picker
-
-
-func _picker(items: Array, selected: int) -> OptionButton:
-	var b := OptionButton.new()
-	for item in items:
-		b.add_item(item)
-	b.select(selected)
-	return b
-
-
-func _text(text: String) -> Label:
-	var label := Label.new()
-	label.text = text
-	return label
-
-
-func _cost_text(ast: Dictionary) -> String:
-	var drain := SpellGrammar.drain_per_second(ast)
-	var carry := SpellGrammar.payload(ast)
-	var drains: Array[String] = []
-	var carries: Array[String] = []
-	for c in SpellGrammar.COLORS:
-		if drain.has(c):
-			drains.append("%s %s/s" % [c, snappedf(drain[c], 0.01)])
-		if carry.has(c):
-			carries.append("%s %d" % [c, carry[c]])
-	var text := "drains " + ", ".join(drains) + " per target"
-	if not carries.is_empty():
-		text += " · carries " + ", ".join(carries) + " for the spells it creates"
-	return text
-
-
-static func _default_for(verb: String) -> Dictionary:
-	match verb:
-		"create":
-			return {"verb": "create", "what": {"material": "wood"}}
-		"destroy":
-			return {"verb": "destroy", "what": {"closest": "fire"}}
-		"move":
-			return {"verb": "move", "what": {"closest": "stone"}, "to": {"closest": "player"}}
-		"mark":
-			return {"verb": "mark", "what": {"ref": "this"}}
-		"alternate":
-			return {"verb": "alternate", "first": {"slot": 4}, "second": {"slot": 5}}
-	return {"verb": "select", "what": {"closest": "player"}}
+## Clicking words changed the spell: show it as text too.
+func _on_clicked_edit() -> void:
+	_show_selected(true)

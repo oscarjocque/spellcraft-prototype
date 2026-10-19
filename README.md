@@ -19,11 +19,30 @@ selector are enough to build spells that interact in ways nobody scripted.
 | --- | --- |
 | WASD / arrows | Move |
 | 1–9, 0 | Cast that slot's spell toward the mouse |
+| Enter | Type a spell to cast (see below) |
+| Tab | Open or close the spellbook (pauses the simulation) |
 | Left click | While picking This or There, pick |
-| Esc | Cancel a cast that is waiting for picks |
+| Esc | Cancel a cast that is waiting for picks, or close the typing bar |
 | Space | Drop one of your attached spells (pick it in a window) |
-| Tab | Open or close the spell editor (pauses the simulation) |
 | R | Reset the sandbox |
+
+### Making spells fast
+
+**Type them.** Press **Enter**, type the spell, press **Enter** again: it's
+cast toward the mouse. Words can be cut to any prefix that fits where they
+stand, so `mo cl st to me` is `Move (Closest Stone) to Me`; parentheses,
+commas, "of" and "m" are optional, plurals are fine (`destroy all fires within
+3 of there, up to 2`), and a noun on its own holds it (`closest player`).
+While you type, up to five words that could come next are suggested (**Tab**
+takes the first) and the spell is shown as it's understood, colored by the
+mana each word costs, with its cost. **Ctrl+1–0** saves it to that slot
+instead; **↑/↓** recall spells typed before.
+
+**Or click them.** **Tab** opens the spellbook: your ten slots on the left,
+the chosen one on the right, where you can type it the same way or click its
+words. Each word opens a menu of at most five choices (longer lists are split
+into submenus: Pick ▸ Closest, Farthest, Random, All), "+" adds optional parts
+(adjectives, "within", "up to", "at"), and optional parts have Remove.
 
 For now the player has **infinite mana**: casting never takes from storage,
 but each spell still gets its usual fuel and reserve. To turn it off, remove
@@ -41,7 +60,7 @@ diamonds to collect mana.
 | Adjectives | Moving, Burning, Mine, Theirs, Marked |
 | Picked when casting | Chosen *(an attached spell)*, This *(click an object)*, There *(click a place)* |
 | Other nouns | Me, Here *(the spell's location)*, Aimed, It *(inside an Alternate)* |
-| Adverbs | up to N *(1, 2, 3, 4, 5 or 10)* |
+| Adverbs | up to N *(1, 2, 3 or 5)* |
 | Relations | Target of, Caster of, Maker of, Products of |
 
 The preset slots (keys 1–9 and 0):
@@ -168,7 +187,7 @@ and a Destroy following a selector goes on to the selector's next pick.
 ### Spells that create spells
 
 Choose **Spell** as Create's object to describe the spell to create (in the
-editor, a nested sentence opens in brackets). Spells nest: the created spell
+spellbook, a nested sentence opens in brackets). Spells nest: the created spell
 can itself be a Create Spell.
 
 - **Create Spell makes 3 spells**, one at once and then one a second, then
@@ -218,7 +237,9 @@ scripts/
     spell_grammar.gd spells as data: blocks, words, mana colors, validation
     spell.gd         a cast spell: performs its verb every tick until it ends
   render/world_view.gd   draws simulation state, smoothed between ticks
-  ui/hud.gd, ui/spell_editor.gd
+  spells/spell_parser.gd  reads typed spells; suggests the next word
+  ui/hud.gd, ui/spell_editor.gd (the spellbook), ui/spell_chips.gd (clickable
+  words), ui/spell_input.gd + ui/quick_cast.gd (typing), ui/spell_text.gd
   sandbox.gd       test arena and preset spells
   main.gd          runs the tick loop and turns local input into commands
 tests/test_spells.gd   headless tests for every prototype spell and rule
@@ -249,5 +270,5 @@ constants at the top of each script.
 - **Mana can be selected and moved but not created.** Create Mana would produce mana for less than it yields.
 - **Mana crystals regrow:** one random crystal appears every 3 s, up to 12 in the world.
 - **Picks are stored in the spell.** What you click for This and There, and pick for Chosen, is written into the cast spell, so the server can check it: Chosen must be one of your attached spells, This an existing object, There inside the arena.
-- **Spells are edited while the game is paused.** The editor is dropdowns that only offer blocks that fit the grammar. It stands in for a drag-and-drop block editor.
+- **Spells are edited in the spellbook while the game is paused, or typed while it runs.** The word menus only offer words that fit the grammar.
 - **Objects are circles.** There are no boxes or height layers yet.

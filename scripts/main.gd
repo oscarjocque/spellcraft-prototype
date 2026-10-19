@@ -65,6 +65,7 @@ func _process(delta: float) -> void:
 			sim.step({player.controller: _command()})
 	view.alpha = _accum / Simulation.DT
 	hud.refresh(sim, player, slots, selected, _prompt())
+	hud.visible_parts(not editor.visible)
 
 
 func _command() -> Dictionary:
@@ -168,7 +169,7 @@ func _input(event: InputEvent) -> void:
 		if editor.visible:
 			editor.hide()
 		else:
-			editor.open(slots)
+			editor.open(slots, selected)
 		get_viewport().set_input_as_handled()
 	elif event.keycode in [KEY_ENTER, KEY_KP_ENTER] and not editor.visible and not picker.visible \
 			and _casting.is_empty():

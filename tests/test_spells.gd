@@ -1073,6 +1073,57 @@ func test_suggest() -> void:
 		check(SpellParser.suggest(text).size() <= 5, "Never more than five suggestions")
 
 
+## Every [popup, id] a SpellChips row offers, menus and submenus, in order.
+func chip_actions(chips: SpellChips) -> Array:
+	var out := []
+	for c in chips.get_children():
+		if c is MenuButton:
+			_menu_actions(c.get_popup(), out)
+	return out
+
+
+func _menu_actions(popup: PopupMenu, out: Array) -> void:
+	check(popup.item_count <= 5, "A word's menu has at most five entries")
+	for i in popup.item_count:
+		var sub := popup.get_item_submenu_node(i)
+		if sub != null:
+			_menu_actions(sub, out)
+		else:
+			out.append([popup, popup.get_item_id(i)])
+
+
+func test_chip_menus() -> void:
+	var spells: Array = Sandbox.PRESETS.duplicate(true)
+	spells.append_array([
+		{"verb": "destroy", "what": {"all": "fire", "adj": ["moving"], "within": 3, "from": {"ref": "there"}}, "adverbs": {"up_to": 2}},
+		{"verb": "create", "what": {"material": "water"}, "at": {"caster_of": {"ref": "chosen"}}},
+		{"verb": "alternate", "first": {"ref": "chosen"}, "second": {"slot": 9}},
+		{"verb": "mark", "what": {"random": "mana", "adj": ["mine", "theirs", "marked", "burning"]}},
+	])
+	var tried := 0
+	for spell in spells:
+		var count := 0
+		var chips := SpellChips.new()
+		root.add_child(chips)
+		chips.show_spell(spell.duplicate(true))
+		count = chip_actions(chips).size()
+		chips.free()
+		for k in count:
+			# Each choice, on a fresh copy: the spell must stay a spell.
+			var copy: Dictionary = spell.duplicate(true)
+			var fresh := SpellChips.new()
+			root.add_child(fresh)
+			fresh.show_spell(copy)
+			var action: Array = chip_actions(fresh)[k]
+			action[0].id_pressed.emit(action[1])
+			var err := SpellGrammar.validate(copy, false)
+			check(err == "", "Choosing from a word's menu keeps \"%s\" a spell (got %s: %s)" % [
+				SpellGrammar.to_text(spell), SpellGrammar.to_text(copy), err])
+			fresh.free()
+			tried += 1
+	check(tried > 200, "(tried %d menu choices)" % tried)
+
+
 func test_deterministic() -> void:
 	check(_replay() == _replay(), "Same inputs give the same world")
 

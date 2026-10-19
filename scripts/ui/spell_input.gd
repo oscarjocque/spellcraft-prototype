@@ -11,6 +11,9 @@ const HINT_COLOR := Color("8a8f98")
 
 var field: LineEdit
 var result := {}  # the latest parse: {"ast"} or {"error"}
+## Only preview what the text reads as when that differs from the text itself,
+## and leave the cost out (for where the spell is shown with its cost already).
+var compact := false
 
 var _hints: HBoxContainer
 var _preview: RichTextLabel
@@ -46,11 +49,19 @@ func set_text(text: String) -> void:
 func _on_text_changed(text: String) -> void:
 	result = SpellParser.parse(text) if text.strip_edges() != "" else {}
 	if result.has("ast"):
-		_preview.text = SpellText.bbcode(result["ast"]) + "\n[font_size=12]" + SpellText.cost(result["ast"]) + "[/font_size]"
+		var reads_as := SpellGrammar.to_text(result["ast"])
+		if compact and reads_as.to_lower() == text.strip_edges().to_lower():
+			_preview.text = ""
+		elif compact:
+			_preview.text = "[color=#8a8f98]reads as[/color]  " + SpellText.bbcode(result["ast"])
+		else:
+			_preview.text = SpellText.bbcode(result["ast"]) + "\n[font_size=12]" + SpellText.cost(result["ast"]) + "[/font_size]"
 	elif result.has("error"):
 		_preview.text = "[color=#ff8a8a]%s[/color]" % result["error"]
-	else:
+	elif not compact:
 		_preview.text = "[color=#%s]Tab completes · Enter casts[/color]" % HINT_COLOR.to_html(false)
+	else:
+		_preview.text = ""
 	_show_hints(SpellParser.suggest(text))
 	changed.emit(result)
 
@@ -81,11 +92,15 @@ func _accept(word: String) -> void:
 
 
 func _on_field_input(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and event.keycode == KEY_TAB:
+	if not (event is InputEventKey and event.pressed):
+		return
+	if event.keycode == KEY_TAB:
 		var words := SpellParser.suggest(field.text)
 		if not words.is_empty():
 			_accept(words[0])
 		field.accept_event()
+	elif event.keycode == KEY_ESCAPE:
+		field.release_focus()
 
 
 func _submit() -> void:

@@ -49,7 +49,7 @@ const COLORS := ["red", "blue", "green", "violet"]
 const CREATED_SPELL_SECONDS := 60.0  # how long a created spell's mana must last
 const CREATED_SPELLS := 3  # how many spells one Create Spell makes, unless "up to"
 const ADVERBS := ["up_to"]
-const UP_TO := [1, 2, 3, 4, 5, 10]
+const UP_TO := [1, 2, 3, 5]
 
 ## First sketch from the design doc, to be tuned.
 const BLOCK_COLOR := {

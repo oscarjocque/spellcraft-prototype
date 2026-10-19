@@ -37,11 +37,12 @@ func refresh(sim: Simulation, player: WorldObject, slots: Array, selected: int, 
 
 	var text := ""
 	for i in slots.size():
-		var line := "%d  %s" % [(i + 1) % 10, SpellGrammar.to_text(slots[i])]
-		text += ("[b][color=#ffd34d]> %s[/color][/b]" % line if i == selected else "   " + line) + "\n"
+		var key := "[b]%d[/b]" % ((i + 1) % 10)
+		var mark := "[color=#ffd34d]▶[/color] " if i == selected else "   "
+		text += "%s%s  %s\n" % [mark, key, SpellText.bbcode(slots[i])]
 	for m in sim.messages:
 		text += "[color=#ff8a8a]%s[/color]\n" % m
-	text += "[color=#8a8f98]WASD move · 1-9, 0 cast toward the mouse · Enter type a spell · Space drop a spell · Tab edit spells · R reset[/color]"
+	text += "[color=#8a8f98]WASD move · 1–0 cast toward the mouse · Enter type a spell · Tab spellbook · Space drop a spell · R reset[/color]"
 	_bottom.text = text
 
 	var inv := "[b]Attached spells[/b]  [color=#8a8f98]Chosen picks from these[/color]\n"
@@ -49,8 +50,14 @@ func refresh(sim: Simulation, player: WorldObject, slots: Array, selected: int, 
 	if attached.is_empty():
 		inv += "[color=#8a8f98]none[/color]"
 	for i in attached.size():
-		inv += "%d  %s\n" % [i + 1, SpellGrammar.to_text(attached[i].spell.ast)]
+		inv += "%d  %s\n" % [i + 1, SpellText.bbcode(attached[i].spell.ast)]
 	_inventory.text = inv
+
+
+## Hides the slot list and inventory (under the spellbook, which shows them).
+func visible_parts(shown: bool) -> void:
+	_bottom.visible = shown
+	_inventory.visible = shown
 
 
 func _make_label(pos: Vector2) -> RichTextLabel:
