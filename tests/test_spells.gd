@@ -16,7 +16,7 @@ func _init() -> void:
 		"test_spell_absorbs_mana", "test_invalid_created_spell", "test_infinite_mana",
 		"test_inventory", "test_chosen_noun", "test_target_of_selector", "test_target_of_move",
 		"test_target_of_create", "test_target_of_nests", "test_target_of_non_spell",
-		"test_create_sustains_its_objects", "test_create_keeps_creating", "test_spells_last_longer",
+		"test_create_spell_makes_several", "test_moves_combine", "test_create_sustains_its_objects", "test_create_keeps_creating", "test_spells_last_longer",
 	]:
 		call(t)
 	print("FAILED: %d" % _failures if _failures else "All tests passed.")
@@ -244,9 +244,10 @@ const FIRE_WARDEN := {"verb": "create", "what": {"spell": {"verb": "destroy", "w
 
 
 func test_payload() -> void:
-	# The warden must carry 60 s of Destroy (Closest Fire) at 0.2/s per word:
-	# destroy + closest (violet) and fire (red).
-	check(same(SpellGrammar.payload(FIRE_WARDEN), {"violet": 24.0, "red": 12.0}), "Payload covers the created spell")
+	# Each of the warden's 3 spells gets 60 s of Destroy (Closest Fire) at
+	# 0.2/s per word: destroy + closest (violet) and fire (red).
+	check(same(SpellGrammar.share(FIRE_WARDEN["what"]["spell"]), {"violet": 24.0, "red": 12.0}), "A share runs one created spell")
+	check(same(SpellGrammar.payload(FIRE_WARDEN), {"violet": 72.0, "red": 36.0}), "Payload covers every created spell")
 	check(same(SpellGrammar.drain_per_second(FIRE_WARDEN), {"red": 0.2, "violet": 0.2}), "Creator drains only its own words")
 	check(SpellGrammar.blocks(FIRE_WARDEN).size() == 5, "Words include the created spell's")
 	check(SpellGrammar.to_text(FIRE_WARDEN) == "Create Spell [Destroy (Closest Fire)].", "Created spell reads inside brackets")
@@ -256,15 +257,17 @@ func test_create_spell_pays_from_reserve() -> void:
 	var w := world()
 	var sim: Simulation = w[0]
 	var p: WorldObject = w[1]
+	for c in SpellGrammar.COLORS:
+		p.mana_store[c] = 200.0
 	sim.spawn(Materials.make("fire", Vector2(600, 200)))
 	var parent := sim.cast(p, FIRE_WARDEN, Vector2(400, 360))
-	# Storage pays the reserve (violet 24, red 12) and then up to 10 fuel per color.
-	check(is_equal_approx(p.mana_store["violet"], 0.0), "Caster pays the created spell's mana up front")
-	check(is_equal_approx(p.mana_store["red"], 8.0), "Caster pays the created spell's red mana up front")
+	# Storage pays the reserve (violet 72, red 36) and then up to 10 fuel per color.
+	check(is_equal_approx(p.mana_store["violet"], 118.0), "Caster pays the created spells' mana up front")
+	check(is_equal_approx(p.mana_store["red"], 154.0), "Caster pays the created spells' red mana up front")
 	var child: WorldObject = parent.spell.what
 	check(child != null and child.spell != null, "Create Spell puts a spell into the world")
 	check(same(child.spell.mana, {"violet": 24.0, "red": 12.0}), "The created spell's mana comes from the creator's reserve")
-	check(parent.spell.reserve.is_empty(), "The reserve is handed over")
+	check(same(parent.spell.reserve, {"violet": 48.0, "red": 24.0}), "One share of the reserve is handed over")
 	check(not child.spell.anchored and child.pos.x > p.pos.x, "The created spell sits in front of the caster")
 	check(p.last_it == child, "It refers to the created spell")
 	run(sim, 10)
@@ -276,13 +279,15 @@ func test_nested_create_spell() -> void:
 	var sim: Simulation = w[0]
 	var p: WorldObject = w[1]
 	var ast := {"verb": "create", "what": {"spell": {"verb": "create", "what": {"spell": {"verb": "create", "what": {"material": "fire"}}}}}}
-	check(same(SpellGrammar.payload(ast), {"red": 36.0, "violet": 12.0}), "Payload includes the created spell's own payload")
+	# Middle share: 60 s of create + spell (red 12, violet 12) + its own payload
+	# of 3 x 60 s of Create Fire (red 72). Outer payload: 3 middle shares.
+	check(same(SpellGrammar.payload(ast), {"red": 252.0, "violet": 36.0}), "Payload includes the created spells' own payloads")
 	for c in SpellGrammar.COLORS:
-		p.mana_store[c] = 100.0
+		p.mana_store[c] = 1000.0
 	var outer := sim.cast(p, ast, Vector2(600, 360))
 	var middle: WorldObject = outer.spell.what
 	check(same(middle.spell.mana, {"red": 12.0, "violet": 12.0}), "Middle spell keeps its fuel")
-	check(middle.spell.reserve.is_empty(), "Middle spell hands its reserve on when it creates")
+	check(same(middle.spell.reserve, {"red": 48.0}), "Middle spell hands one share on when it creates")
 	var inner: WorldObject = middle.spell.what
 	check(inner != null and same(inner.spell.mana, {"red": 24.0}), "Innermost spell is paid from the middle reserve")
 	run(sim, 20)
@@ -299,7 +304,7 @@ func test_create_spell_needs_its_payload() -> void:
 
 
 func test_created_spell_stays_put() -> void:
-	var w := world()
+	var w := spell_world()
 	var sim: Simulation = w[0]
 	var p: WorldObject = w[1]
 	var parent := sim.cast(p, {"verb": "create", "what": {"spell": {"verb": "select", "qualifier": "player"}}}, Vector2(400, 360))
@@ -400,6 +405,42 @@ func spell_world() -> Array:
 	var w := world()
 	w[1].tags["infinite_mana"] = true
 	return w
+
+
+func test_create_spell_makes_several() -> void:
+	var w := spell_world()
+	var sim: Simulation = w[0]
+	var p: WorldObject = w[1]
+	var ast := {"verb": "create", "what": {"spell": {"verb": "select", "qualifier": "player"}}}
+	var maker := sim.cast(p, ast, Vector2(800, 360))
+	check(maker.spell.created.size() == 1, "The first spell is created at once")
+	run(sim, Simulation.TICK_RATE)
+	check(maker.spell.created.size() == 2, "The next follows a second later")
+	run(sim, Simulation.TICK_RATE + 1)
+	var made := maker.spell.created
+	check(made.size() == SpellGrammar.CREATED_SPELLS and maker.dead, "It ends once it has made all of them")
+	check(made[1].pos.x > made[0].pos.x and made[2].pos.x > made[1].pos.x, "They form a line toward the aim")
+	for o in made:
+		check(not o.dead and o.spell.mana["violet"] > 23.0, "Each created spell got a full share")
+	check(maker.spell.reserve.values().all(func(v: float) -> bool: return v < 0.001), "The whole reserve went to them")
+
+
+func test_moves_combine() -> void:
+	var w := spell_world()
+	var sim: Simulation = w[0]
+	var p: WorldObject = w[1]
+	var stone := sim.spawn(Materials.make("stone", Vector2(640, 360)))
+	sim.spawn(Materials.make("wood", Vector2(640, 100)))
+	sim.spawn(Materials.make("water", Vector2(1000, 360)))
+	sim.cast(p, {"verb": "move", "what": {"closest": "stone"}, "to": {"closest": "wood"}}, Vector2.ZERO)
+	sim.cast(p, {"verb": "move", "what": {"closest": "stone"}, "to": {"closest": "water"}}, Vector2.ZERO)
+	run(sim, 1)
+	var step := stone.pos - stone.prev_pos
+	check(step.x > 0 and step.y < 0, "Two Moves on one object combine their directions")
+	check(step.length() > Spell.MOVE_SPEED * Simulation.DT * 1.3, "...and their speeds add up")
+	sim.cast(p, {"verb": "move", "what": {"ref": "me"}, "to": {"closest": "water"}}, Vector2.ZERO)
+	sim.step({0: {"move": Vector2.UP}})
+	check(p.pos.x > p.prev_pos.x and p.pos.y < p.prev_pos.y, "A Move on a player adds to their walking")
 
 
 func test_inventory() -> void:

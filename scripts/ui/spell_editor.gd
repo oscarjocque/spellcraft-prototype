@@ -176,7 +176,7 @@ func _cost_text(ast: Dictionary) -> String:
 			carries.append("%s %d" % [c, carry[c]])
 	var text := "drains " + ", ".join(drains)
 	if not carries.is_empty():
-		text += " · carries " + ", ".join(carries) + " for the spell it creates"
+		text += " · carries " + ", ".join(carries) + " for the spells it creates"
 	return text
 
 

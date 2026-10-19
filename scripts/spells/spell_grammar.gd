@@ -27,6 +27,7 @@ const QUALIFIERS := ["fire", "water", "wood", "stone", "spell", "player", "mana"
 const REFS := ["me", "it", "held", "chosen"]
 const COLORS := ["red", "blue", "green", "violet"]
 const CREATED_SPELL_SECONDS := 60.0  # how long a created spell's mana must last
+const CREATED_SPELLS := 3  # how many spells one Create Spell makes
 
 ## First sketch from the design doc, to be tuned.
 const BLOCK_COLOR := {
@@ -97,12 +98,21 @@ static func drain_per_second(ast: Dictionary) -> Dictionary:
 	return drain
 
 
-## Mana a spell must carry in reserve for the spell it creates: enough to run
-## that spell for CREATED_SPELL_SECONDS, plus that spell's own payload.
+## Mana a spell must carry in reserve for the spells it creates: one `share`
+## for each of the CREATED_SPELLS it makes.
 static func payload(ast: Dictionary) -> Dictionary:
 	var inner := created_spell(ast)
 	if inner.is_empty():
 		return {}
+	var need := share(inner)
+	for c in need:
+		need[c] *= CREATED_SPELLS
+	return need
+
+
+## What one created spell is given: enough to run it for
+## CREATED_SPELL_SECONDS, plus what it must carry for its own created spells.
+static func share(inner: Dictionary) -> Dictionary:
 	var need := payload(inner)
 	var drain := drain_per_second(inner)
 	for c in drain:

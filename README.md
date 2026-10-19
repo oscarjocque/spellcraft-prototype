@@ -93,16 +93,21 @@ Choose **Spell** as Create's object to describe the spell to create (in the
 editor, a nested sentence opens in brackets). Spells nest: the created spell
 can itself be a Create Spell.
 
+- **Create Spell makes 3 spells**, one at once and then one a second, in a
+  line toward where it was cast, then ends.
 - **The creator carries the mana up front.** Casting a spell that creates
-  another takes, besides its own fuel, a *reserve*: enough to run the created
-  spell for 60 s, plus that spell's own reserve, and so on down. If storage
-  can't cover the reserve, the cast fails.
-- **A created spell is paid from its creator's reserve**, never from the
-  caster's storage. It keeps what it must carry for its own created spell as
-  its reserve and burns the rest.
-- **A created spell sits where it was made**, just in front of its creator,
-  and doesn't follow the caster. Me still means the caster, and It means the
-  new spell.
+  others takes, besides its own fuel, a *reserve* of one *share* per spell it
+  will make. A share is enough to run that spell for 60 s, plus that spell's
+  own reserve, and so on down, so nesting multiplies the cost (3 x 3 spells
+  for a Create Spell inside a Create Spell). If storage can't cover the
+  reserve, the cast fails; with ordinary storage (30 per color) that rules
+  most Create Spells out, so they're really for the infinite-mana sandbox.
+- **A created spell is paid from its creator's reserve**, one share each,
+  never from the caster's storage. It keeps what it must carry for its own
+  created spells as its reserve and burns the rest.
+- **A created spell sits where it was made** and doesn't follow the caster.
+  Me still means the caster, It means the first spell created, and Target of
+  the creator means the newest.
 - Each spell drains only its own words. A spell that ends returns fuel and
   any unspent reserve to the world.
 - There is no word limit; cost (drain plus reserve) is what keeps spells in check.
@@ -111,7 +116,9 @@ can itself be a Create Spell.
 
 Interaction rules: fire sets flammable things burning, and burning wood is
 destroyed. Water destroys fire and puts out burning things. Anything moving
-stops at stone. A fast, heavy solid object damages whatever it hits. A spell
+stops at stone. A fast, heavy solid object damages whatever it hits. Moves
+add up: several Moves on one object combine their pushes (opposite ones
+cancel), and a Move on a player adds to their walking. A spell
 that touches mana absorbs it into its own fuel, so `Move (Closest Mana) to It`
 can top up a running spell.
 

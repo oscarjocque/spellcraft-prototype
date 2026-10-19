@@ -4,7 +4,8 @@ extends RefCounted
 ## verb every tick until it reaches its goal, runs out of mana, or is destroyed.
 ## Create has no goal: it builds one object after another in a line along the
 ## direction it was cast, sustaining each finished one (fire doesn't burn out),
-## until its mana runs out.
+## until its mana runs out. Create Spell likewise makes a line of spells, one
+## every CREATE_SPELL_TICKS, until it has made CREATED_SPELLS of them.
 ##
 ## Anchors: every spell a player casts follows them, including a bare selector,
 ## which they hold until a later spell takes it in with the noun Held. Spells
@@ -15,6 +16,8 @@ extends RefCounted
 
 const CREATE_TICKS_PER_RADIUS := 1.5  # bigger objects take longer to build
 const CREATE_SPACING := 4.0  # gap between objects in a Create line
+const CREATE_SPELL_TICKS := Simulation.TICK_RATE  # time between created spells
+const CREATED_SPELL_SPACING := 30.0  # distance between spells in a Create Spell line
 const DESTROY_RATE := 100.0  # health per second
 const MOVE_SPEED := 140.0  # pixels per second
 
@@ -43,6 +46,8 @@ var _full_radius := 0.0
 var _lifetime := -1  # a created object's full lifetime in ticks, -1 = none
 var _material := ""
 var _edge := 0.0  # distance from the host to where the Create line starts
+var _inner := {}  # for Create Spell: the spell it creates
+var _spell_timer := 0
 
 
 func _init(p_ast: Dictionary, p_caster: WorldObject, p_host: WorldObject, p_mana: Dictionary,
@@ -73,13 +78,13 @@ func on_cast(sim: Simulation, aim: Vector2) -> void:
 	var edge := (caster.radius if anchored else host.radius) + 6.0
 	match ast["verb"]:
 		"create":
-			var inner := SpellGrammar.created_spell(ast)
-			if not inner.is_empty():
-				what = _create_spell(sim, inner, host.pos + _dir * (edge + host.radius))
+			_edge = edge
+			_inner = SpellGrammar.created_spell(ast)
+			if not _inner.is_empty():
+				_create_spell(sim)
 			else:
 				_material = ast["what"]["material"]
 				_full_radius = Materials.PROPS[_material]["radius"]
-				_edge = edge
 				_build_step = 1.0 / (CREATE_TICKS_PER_RADIUS * _full_radius)
 				_start_object(sim)
 		"destroy":
@@ -108,16 +113,21 @@ func _start_object(sim: Simulation) -> void:
 	created.append(what)
 
 
-## Starts `inner` at `pos`, paid entirely from this spell's reserve. The new
-## spell keeps what it must carry for its own created spell as its reserve,
-## and burns the rest as fuel.
-func _create_spell(sim: Simulation, inner: Dictionary, pos: Vector2) -> WorldObject:
-	var inner_reserve := SpellGrammar.payload(inner)
-	var inner_fuel := {}
-	for c in reserve:
-		inner_fuel[c] = reserve[c] - inner_reserve.get(c, 0.0)
-	reserve = {}
-	return sim.start_spell(inner, caster, pos, inner_fuel, inner_reserve, pos + _dir * 100.0, false, chosen)
+## Starts the next spell of a Create Spell line, just past the last one, paid
+## with one share of this spell's reserve. The new spell keeps what it must
+## carry for its own created spells as its reserve, and burns the rest as fuel.
+func _create_spell(sim: Simulation) -> void:
+	var inner_reserve := SpellGrammar.payload(_inner)
+	var inner_fuel := SpellGrammar.drain_per_second(_inner)
+	for c in inner_fuel:
+		inner_fuel[c] *= SpellGrammar.CREATED_SPELL_SECONDS
+	var paid := SpellGrammar.share(_inner)
+	for c in paid:
+		reserve[c] = maxf(0.0, reserve.get(c, 0.0) - paid[c])
+	var pos := host.pos + _dir * (_edge + host.radius + created.size() * CREATED_SPELL_SPACING)
+	what = sim.start_spell(_inner, caster, pos, inner_fuel, inner_reserve, pos + _dir * 100.0, false, chosen)
+	created.append(what)
+	_spell_timer = 0
 
 
 ## Runs every tick. Returns false once the spell has ended.
@@ -134,8 +144,14 @@ func tick(sim: Simulation) -> bool:
 
 	match ast["verb"]:
 		"create":
-			if _material == "":
-				return false  # a created spell starts whole, so Create Spell is done
+			if not _inner.is_empty():
+				# A created spell starts whole; make the next after a pause.
+				if created.size() >= SpellGrammar.CREATED_SPELLS:
+					return false
+				_spell_timer += 1
+				if _spell_timer >= CREATE_SPELL_TICKS:
+					_create_spell(sim)
+				return true
 			if what.dead or _build >= 1.0:
 				_start_object(sim)
 			_build = minf(1.0, _build + _build_step)
@@ -161,7 +177,8 @@ func tick(sim: Simulation) -> bool:
 				return _to_hops > 0
 			if subject.pos.distance_to(dest.pos) - subject.radius - dest.radius <= 2.0:
 				return _to_hops > 0
-			subject.velocity = subject.pos.direction_to(dest.pos) * MOVE_SPEED
+			# Pushes add up, so several Moves on one object combine.
+			subject.velocity += subject.pos.direction_to(dest.pos) * MOVE_SPEED
 			return true
 		"select":
 			current = _closest(sim, ast["qualifier"])
