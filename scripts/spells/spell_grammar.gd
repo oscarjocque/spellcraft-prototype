@@ -10,16 +10,15 @@ extends RefCounted
 ##   {"verb": "select", "qualifier": "player"}   # independent Closest selector
 ##
 ## NOUN is {"ref": "me"}, {"ref": "it"} or {"closest": QUALIFIER}.
-## Every block is one word and costs mana of one color. A created spell's words
-## count toward the slot limit, but it pays its own drain: the spell creating
-## it must carry that mana as a reserve (see `payload`).
+## Every block is one word and costs mana of one color. A created spell pays
+## its own drain: the spell creating it must carry that mana as a reserve
+## (see `payload`).
 
 const VERBS := ["create", "destroy", "move", "select"]
 const MATERIALS := ["fire", "water", "wood", "stone"]
 const QUALIFIERS := ["fire", "water", "wood", "stone", "spell", "player", "mana"]
 const REFS := ["me", "it"]
 const COLORS := ["red", "blue", "green", "violet"]
-const SLOT_LIMIT := 6  # words per spell; grows with progression later
 const CREATED_SPELL_SECONDS := 5.0  # how long a created spell's mana must last
 
 ## First sketch from the design doc, to be tuned.
@@ -101,18 +100,8 @@ static func payload(ast: Dictionary) -> Dictionary:
 	return need
 
 
-## Returns "" if the spell is grammatical and fits the slot limit, else why not.
+## Returns "" if the spell is grammatical, else why not.
 static func validate(ast: Dictionary) -> String:
-	var err := _check(ast)
-	if err != "":
-		return err
-	var words := blocks(ast).size()
-	if words > SLOT_LIMIT:
-		return "Spell has %d words; the limit is %d." % [words, SLOT_LIMIT]
-	return ""
-
-
-static func _check(ast: Dictionary) -> String:
 	var verb: String = ast.get("verb", "")
 	match verb:
 		"create":
@@ -122,7 +111,7 @@ static func _check(ast: Dictionary) -> String:
 			if what.has("spell"):
 				if not what["spell"] is Dictionary:
 					return "Create Spell needs a description of the spell."
-				return _check(what["spell"])
+				return validate(what["spell"])
 			if not what.get("material", "") in MATERIALS:
 				return "Create needs a material or a spell."
 		"destroy":

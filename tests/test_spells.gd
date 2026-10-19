@@ -182,7 +182,7 @@ func test_payload() -> void:
 	# (violet) and fire (red).
 	check(SpellGrammar.payload(FIRE_WARDEN) == {"violet": 10.0, "red": 5.0}, "Payload covers the created spell")
 	check(SpellGrammar.drain_per_second(FIRE_WARDEN) == {"red": 1.0, "violet": 1.0}, "Creator drains only its own words")
-	check(SpellGrammar.blocks(FIRE_WARDEN).size() == 5, "Created spell's words count toward the limit")
+	check(SpellGrammar.blocks(FIRE_WARDEN).size() == 5, "Words include the created spell's")
 	check(SpellGrammar.to_text(FIRE_WARDEN) == "Create Spell [Destroy (Closest Fire)].", "Created spell reads inside brackets")
 
 
@@ -262,8 +262,9 @@ func test_invalid_created_spell() -> void:
 		"Create Spell rejects an incomplete spell description")
 	check(SpellGrammar.validate({"verb": "create", "what": {"spell": "fireball"}}) != "",
 		"Create Spell needs the spell as a description")
-	var too_long := {"verb": "create", "what": {"spell": FIRE_WARDEN}}
-	check(SpellGrammar.validate(too_long) != "", "Nested words count toward the slot limit")
+	var long_spell := {"verb": "create", "what": {"spell": {"verb": "create", "what": {"spell":
+		{"verb": "move", "what": {"closest": "stone"}, "to": {"closest": "player"}}}}}}
+	check(SpellGrammar.validate(long_spell) == "", "Spells have no word limit")
 
 
 func test_deterministic() -> void:

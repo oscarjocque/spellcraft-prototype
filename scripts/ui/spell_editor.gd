@@ -59,7 +59,7 @@ func _fill_slot(slot: VBoxContainer, i: int) -> void:
 	if err != "":
 		summary.add_theme_color_override("font_color", Color("ff8a8a"))
 	else:
-		summary.text = "      %d/%d words · %s" % [SpellGrammar.blocks(ast).size(), SpellGrammar.SLOT_LIMIT, _cost_text(ast)]
+		summary.text = "      %d words · %s" % [SpellGrammar.blocks(ast).size(), _cost_text(ast)]
 		summary.add_theme_color_override("font_color", Color("a0a4ab"))
 	summary.add_theme_font_size_override("font_size", 12)
 	slot.add_child(summary)

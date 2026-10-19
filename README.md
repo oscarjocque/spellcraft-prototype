@@ -67,8 +67,9 @@ can itself be a Create Spell.
 - **A created spell sits where it was made**, just in front of its creator,
   and doesn't follow the caster. Me still means the caster, and It means the
   new spell.
-- Its words count toward the slot limit, but each spell drains only its own
-  words. A spell that ends returns fuel and any unspent reserve to the world.
+- Each spell drains only its own words. A spell that ends returns fuel and
+  any unspent reserve to the world.
+- There is no word limit; cost (drain plus reserve) is what keeps spells in check.
 
 ### Rules
 
@@ -99,7 +100,7 @@ tests/test_spells.gd   headless tests for every prototype spell and rule
 
 The design calls for a server-authoritative multiplayer game, so the
 simulation is kept apart from everything else. It takes input only as
-command dictionaries, validates every cast (grammar, slot limit, mana), and
+command dictionaries, validates every cast (grammar, mana), and
 is deterministic for a given seed and inputs. Networking can be added later
 without changing it.
 
