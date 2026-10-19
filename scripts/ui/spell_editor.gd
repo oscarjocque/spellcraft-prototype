@@ -31,6 +31,7 @@ func _ready() -> void:
 func open(p_slots: Array) -> void:
 	slots = p_slots
 	for c in _rows.get_children():
+		_rows.remove_child(c)  # detach now; queue_free alone leaves it laid out this frame
 		c.queue_free()
 	for i in slots.size():
 		var slot := VBoxContainer.new()
@@ -38,7 +39,13 @@ func open(p_slots: Array) -> void:
 		_fill_slot(slot, i)
 	move_to_front()  # above the HUD's labels
 	show()
-	position = (get_viewport_rect().size - get_combined_minimum_size()) / 2
+	_recenter.call_deferred()
+
+
+## Containers grow but never shrink on their own, so fit to the content again.
+func _recenter() -> void:
+	reset_size()
+	position = ((get_viewport_rect().size - size) / 2).max(Vector2.ZERO)
 
 
 ## One slot: the sentence's pickers, with its word count and cost below.
@@ -63,6 +70,8 @@ func _fill_slot(slot: VBoxContainer, i: int) -> void:
 		summary.add_theme_color_override("font_color", Color("a0a4ab"))
 	summary.add_theme_font_size_override("font_size", 12)
 	slot.add_child(summary)
+	if is_visible_in_tree():
+		_recenter.call_deferred()
 
 
 ## The pickers for one sentence. Edits `ast` in place, so the same code edits a
