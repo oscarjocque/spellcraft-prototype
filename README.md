@@ -21,7 +21,7 @@ selector are enough to build spells that interact in ways nobody scripted.
 | 1–9, 0 | Cast that slot's spell toward the mouse |
 | Enter | Type a spell to cast (see below) |
 | Tab | Open or close the spellbook (pauses the simulation) |
-| Left click | While picking This or There, pick |
+| Left click | While typing a spell, cast it there; while picking This or There, pick |
 | Esc | Cancel a cast that is waiting for picks, or close the typing bar |
 | Space | Drop one of your attached spells (pick it in a window) |
 | F1 | Show every word, colored by mana, with typed examples |
@@ -35,13 +35,20 @@ stand, so `mo cl st to me` is `Move (Closest Stone) to Me`; a thing on its
 own means the closest one (`move stone me`, `destroy fire`); parentheses,
 commas, "of", "to" and "m" are optional, plurals are fine (`destroy all fires
 within 3 of there, up to 2`), and a noun on its own holds it (`closest player`).
+Leave out what a verb acts on and it acts on what the mouse is on (`de` is
+`Destroy This`); leave out where Move moves it and it goes to the mouse
+(`mo st` is `Move (Closest Stone) to There`). A slip of one letter (missing,
+extra, wrong or swapped: `mvoe stoen`) is read as the word it nearly is, when
+nothing reads without it; the spell shown under the bar is how it was read.
 While the typed spell reads, the world rings what it would act on right now,
 and a line says how much, or that it would wait.
 While you type, up to five words that could come next are suggested (**Tab**
 takes the first) and the spell is shown as it's understood, colored by the
 mana each word costs, with its cost. **Ctrl+1–0** saves it to that slot
 instead, **Shift+Enter** casts and keeps the bar open for the next; **↑/↓**
-recall spells typed before. Pointing at something shows the words that
+recall spells typed before. Instead of Enter you can **click** where to cast
+it: what you click is its This (or its There), so `de` and a click destroys
+that thing, and **Shift+click** keeps the spell ready to click onto more. Pointing at something shows the words that
 describe it (Stone · moving · mine).
 
 **Or click them.** **Tab** opens the spellbook: your ten slots on the left,

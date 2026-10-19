@@ -1,8 +1,8 @@
 class_name QuickCast
 extends PanelContainer
 ## The quick-cast bar: Enter opens it, type a spell, Enter casts it toward the
-## mouse. Ctrl+1–0 saves it to that slot instead, Up/Down go through spells
-## typed before, Esc closes.
+## mouse (or click where to cast it). Ctrl+1–0 saves it to that slot instead,
+## Up/Down go through spells typed before, Esc closes.
 
 signal cast(ast: Dictionary)
 signal saved(slot: int, ast: Dictionary)
@@ -24,7 +24,7 @@ func _ready() -> void:
 	var box := VBoxContainer.new()
 	add_child(box)
 	var title := Label.new()
-	title.text = "Cast a spell   ·   Enter cast   ·   Shift+Enter cast, keep typing   ·   Ctrl+1–0 save to slot   ·   ↑↓ earlier spells   ·   F1 words   ·   Esc close"
+	title.text = "Enter or click: cast  ·  Shift keeps it open  ·  Ctrl+1–0 save  ·  ↑↓ earlier  ·  Esc close"
 	title.add_theme_font_size_override("font_size", 12)
 	title.add_theme_color_override("font_color", Color("8a8f98"))
 	box.add_child(title)
@@ -36,6 +36,7 @@ func _ready() -> void:
 	box.add_child(_status)
 	input.submitted.connect(_on_submitted)
 	input.field.gui_input.connect(_on_key)
+	minimum_size_changed.connect(_place)  # stays in the corner as it grows
 	hide()
 
 
@@ -50,7 +51,7 @@ func open() -> void:
 	_history_at = _history.size()
 	show()
 	move_to_front()
-	_place.call_deferred()
+	_place()
 	input.field.grab_focus()
 
 
@@ -59,10 +60,10 @@ func close() -> void:
 	input.field.release_focus()
 
 
+## Bottom right, clear of the slot list on the left.
 func _place() -> void:
 	reset_size()
-	var screen := get_viewport_rect().size
-	position = Vector2((screen.x - size.x) / 2, screen.y - size.y - 60)
+	position = get_viewport_rect().size - size - Vector2(12, 12)
 
 
 func _remember(text: String) -> void:
@@ -70,10 +71,23 @@ func _remember(text: String) -> void:
 	_history.append(text)
 
 
+## Casts what's typed, if it reads as a spell (a click on the world).
+func submit() -> void:
+	if input.result.has("ast"):
+		_cast_typed(input.result["ast"], true)
+
+
 func _on_submitted(ast: Dictionary) -> void:
+	_cast_typed(ast, false)
+
+
+## Shift keeps the bar open: after Enter, empty for the next spell; after a
+## click, with the same spell, to click it onto more things.
+func _cast_typed(ast: Dictionary, clicked: bool) -> void:
 	_remember(input.field.text.strip_edges())
 	if Input.is_key_pressed(KEY_SHIFT):
-		input.set_text("")  # Shift+Enter: cast and keep typing
+		if not clicked:
+			input.set_text("")
 		input.field.grab_focus.call_deferred()
 	else:
 		close()

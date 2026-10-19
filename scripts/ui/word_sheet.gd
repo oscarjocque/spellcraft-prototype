@@ -5,7 +5,7 @@ extends PanelContainer
 
 const GROUPS := [
 	["Verbs", ["create", "destroy", "move", "mark", "", "alternate"],
-		"Hold (a noun on its own) is free"],
+		"Hold (a noun on its own) is free · leave out what a verb acts on: This · where Move goes: There"],
 	["Things", ["thing", "fire", "water", "wood", "stone", "spell", "player", "mana"],
 		"a thing on its own means the closest one"],
 	["Pickers", ["closest", "farthest", "random", "all"], ""],
@@ -16,9 +16,9 @@ const GROUPS := [
 	["Extras", ["within", "from", "at", "up_to"], "within 3 m (of …)  ·  to …  ·  Create … at …  ·  …, up to 2"],
 ]
 const EXAMPLES := [
-	"mo st me", "destroy all fires within 3 of here", "create fire at there",
+	"mo st me", "mo st", "de", "destroy all fires within 3 of here", "create fire at there",
 	"move this to there", "mark all moving stones, up to 2", "closest player",
-	"move stone to target of chosen", "create spell [destroy fire]", "alternate 5 6",
+	"move stone to target of chosen", "create spell [destroy fire]", "alternate 5 6", "mvoe stoen to me",
 ]
 
 var _text: RichTextLabel
@@ -73,5 +73,5 @@ static func _build() -> String:
 		var r := SpellParser.parse(e)
 		var reads: String = SpellText.bbcode(r["ast"]) if r.has("ast") else ""
 		out += "   [code]%s[/code]   [color=#%s]→[/color]   %s\n" % [e, grey, reads]
-	out += "\n[color=#%s]Words can be cut short (mo = move, st = stone). Tab takes a suggestion.[/color]" % grey
+	out += "\n[color=#%s]Words can be cut short (mo = move, st = stone), and a slip of one letter is forgiven. Tab takes a suggestion.[/color]" % grey
 	return out

@@ -22,6 +22,7 @@ const MAX_CRYSTALS := 12
 var tick := 0
 var objects: Array[WorldObject] = []
 var messages: Array[String] = []  # recent messages for the HUD
+var message_ticks: Array[int] = []  # the tick each message was said
 var rng := RandomNumberGenerator.new()
 var _next_id := 1
 var _touching := {}  # solid pairs in contact last tick, as Vector2i(lower id, higher id)
@@ -41,8 +42,10 @@ func spawn(o: WorldObject) -> WorldObject:
 
 func say(text: String) -> void:
 	messages.append(text)
+	message_ticks.append(tick)
 	if messages.size() > 5:
 		messages.pop_front()
+		message_ticks.pop_front()
 
 
 ## Advances the world by one tick. `commands` maps a controller slot to
@@ -145,6 +148,17 @@ func owner_of(o: WorldObject) -> WorldObject:
 	if o.has_tag("player"):
 		return o
 	return null
+
+
+## The Thing or mana under `at` (spells are picked with Chosen), or null:
+## what This means when picked by pointing.
+func object_at(at: Vector2) -> WorldObject:
+	var best: WorldObject = null
+	for o in objects:
+		if not o.dead and o.spell == null and not o.has_tag("place") and at.distance_to(o.pos) <= o.radius + 4.0 \
+				and (best == null or at.distance_to(o.pos) < at.distance_to(best.pos)):
+			best = o
+	return best
 
 
 ## The first Thing along the ray from `from` in direction `dir`, or null.

@@ -2,12 +2,16 @@ class_name Hud
 extends CanvasLayer
 ## Mana storage, spell slots, recent messages and controls.
 
+const MESSAGE_SECONDS := 5
+
 var _top: RichTextLabel
 var _bottom: RichTextLabel
 var _inventory: RichTextLabel
 var _prompt: RichTextLabel
 var _tip: RichTextLabel
 var _hint: RichTextLabel
+var _notices := []  # [text, msec shown]: the player's own doings, e.g. saving
+var _hint_done := false
 
 
 func _ready() -> void:
@@ -21,8 +25,9 @@ func _ready() -> void:
 	_hint = _make_label(Vector2(290, 120))
 	_hint.size.x = 700
 	_hint.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
-	_hint.text = ("[color=#a7abb3]Press [b]Enter[/b] and type [color=#72de8f]move stone to me[/color], "
-			+ "or press a number key to cast a slot.\n[b]Tab[/b] opens your spellbook, [b]F1[/b] lists every word.[/color]")
+	_hint.text = ("[color=#a7abb3]Press [b]Enter[/b], type [color=#72de8f]move stone to me[/color] and press [b]Enter[/b]; "
+			+ "or type [color=#b48cff]destroy[/color] and click a thing.\nNumber keys cast your slots, "
+			+ "[b]Tab[/b] opens your spellbook, [b]F1[/b] lists every word.[/color]")
 	_tip = _make_label(Vector2.ZERO)
 	_tip.size.x = 360
 
@@ -49,10 +54,17 @@ func refresh(sim: Simulation, player: WorldObject, slots: Array, selected: int, 
 		var key := "[b]%d[/b]" % ((i + 1) % 10)
 		var mark := "[color=#ffd34d]▶[/color] " if i == selected else "   "
 		text += "%s%s  %s\n" % [mark, key, SpellText.bbcode(slots[i])]
-	for m in sim.messages:
-		text += "[color=#ff8a8a]%s[/color]\n" % m
+	for i in sim.messages.size():
+		if sim.tick - sim.message_ticks[i] < MESSAGE_SECONDS * Simulation.TICK_RATE:
+			text += "[color=#ff8a8a]%s[/color]\n" % sim.messages[i]
+	var now := Time.get_ticks_msec()
+	_notices = _notices.filter(func(n: Array) -> bool: return now - n[1] < MESSAGE_SECONDS * 1000)
+	for n in _notices:
+		text += "[color=#ffd34d]%s[/color]\n" % n[0]
 	text += "[color=#8a8f98]WASD move · 1–0 cast toward the mouse · Enter type a spell · Tab spellbook · Space drop a spell · F1 words · R reset[/color]"
 	_show_text(_bottom, text)
+	# Grows up from the bottom as messages come and go.
+	_bottom.position.y = _bottom.get_viewport_rect().size.y - _bottom.get_content_height() - 8
 
 	var inv := "[b]Attached spells[/b]  [color=#8a8f98]Chosen picks from these[/color]\n"
 	var attached := sim.inventory(player)
@@ -61,6 +73,11 @@ func refresh(sim: Simulation, player: WorldObject, slots: Array, selected: int, 
 	for i in attached.size():
 		inv += "%d  %s\n" % [i + 1, SpellText.bbcode(attached[i].spell.ast)]
 	_show_text(_inventory, inv)
+
+
+## Shows `text` under the slots for a few seconds.
+func notice(text: String) -> void:
+	_notices.append([text, Time.get_ticks_msec()])
 
 
 ## A label's text, set only when it changed (RichTextLabel re-parses on set).
@@ -77,13 +94,16 @@ func tooltip(bbcode: String, at: Vector2) -> void:
 
 ## Hides the first-run hint (once the player has cast something).
 func hide_hint() -> void:
+	_hint_done = true
 	_hint.visible = false
 
 
-## Hides the slot list and inventory (under the spellbook, which shows them).
+## Hides the slot list, inventory and hint (under the spellbook, which shows
+## the slots).
 func visible_parts(shown: bool) -> void:
 	_bottom.visible = shown
 	_inventory.visible = shown
+	_hint.visible = shown and not _hint_done
 
 
 func _make_label(pos: Vector2) -> RichTextLabel:

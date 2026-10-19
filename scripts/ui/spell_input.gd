@@ -1,8 +1,8 @@
 class_name SpellInput
 extends VBoxContainer
 ## Type a spell: a line to type in, up to five suggestions for the next word
-## (Tab takes the first), and a preview of the spell as understood, or why it
-## isn't one yet.
+## (Tab takes the first, and the rest of it shows faintly after a word being
+## typed), and a preview of the spell as understood, or why it isn't one yet.
 
 signal changed(result: Dictionary)  # SpellParser.parse's result, on every edit
 signal submitted(ast: Dictionary)  # Enter, on a spell that reads
@@ -17,6 +17,7 @@ var compact := false
 
 var _hints: HBoxContainer
 var _preview: RichTextLabel
+var _ghost := ""  # the rest of the word Tab would complete
 
 
 func _ready() -> void:
@@ -27,6 +28,7 @@ func _ready() -> void:
 	field.text_changed.connect(_on_text_changed)
 	field.text_submitted.connect(func(_text: String) -> void: _submit())
 	field.gui_input.connect(_on_field_input)
+	field.draw.connect(_draw_ghost)
 	add_child(field)
 	_hints = HBoxContainer.new()
 	add_child(_hints)
@@ -57,12 +59,19 @@ func _on_text_changed(text: String) -> void:
 		else:
 			_preview.text = SpellText.bbcode(result["ast"]) + "\n[font_size=12]" + SpellText.cost(result["ast"]) + "[/font_size]"
 	elif result.has("error"):
-		_preview.text = "[color=#ff8a8a]%s[/color]" % result["error"]
+		var color := HINT_COLOR.to_html(false) if result.get("unfinished", false) else "ff8a8a"
+		_preview.text = "[color=#%s]%s[/color]" % [color, result["error"]]
 	elif not compact:
 		_preview.text = "[color=#%s]Tab completes · Enter casts[/color]" % HINT_COLOR.to_html(false)
 	else:
 		_preview.text = ""
-	_show_hints(SpellParser.suggest(text))
+	var words := SpellParser.suggest(text)
+	_show_hints(words)
+	var partial := text.substr(maxi(text.rfind(" "), maxi(text.rfind("("), text.rfind("["))) + 1)
+	_ghost = ""
+	if partial != "" and not words.is_empty() and words[0].begins_with(partial.to_lower()):
+		_ghost = words[0].substr(partial.length())
+	field.queue_redraw()
 	changed.emit(result)
 
 
@@ -79,6 +88,18 @@ func _show_hints(words: Array[String]) -> void:
 		var word := words[i]
 		b.pressed.connect(func() -> void: _accept(word))
 		_hints.add_child(b)
+
+
+## The rest of the word Tab would complete, faintly, right after the caret.
+func _draw_ghost() -> void:
+	if _ghost == "" or field.caret_column != field.text.length():
+		return
+	var font := field.get_theme_font("font")
+	var font_size := field.get_theme_font_size("font_size")
+	var left := field.get_theme_stylebox("normal").get_margin(SIDE_LEFT)
+	var x := left + font.get_string_size(field.text, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size).x - field.get_scroll_offset()
+	var y := (field.size.y - font.get_height(font_size)) / 2 + font.get_ascent(font_size)
+	field.draw_string(font, Vector2(x, y), _ghost, HORIZONTAL_ALIGNMENT_LEFT, -1, font_size, Color(HINT_COLOR, 0.8))
 
 
 ## Puts `word` in place of the word being typed (or after the last one).

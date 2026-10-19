@@ -30,7 +30,7 @@ func _ready() -> void:
 	quick.saved.connect(func(slot: int, ast: Dictionary) -> void:
 		slots[slot] = ast
 		Spellbook.save_slots(slots)
-		sim.say("Saved to spell %d: %s" % [(slot + 1) % 10, SpellGrammar.to_text(ast)]))
+		hud.notice("Saved to spell %d: %s" % [(slot + 1) % 10, SpellGrammar.to_text(ast)]))
 	editor.visibility_changed.connect(func() -> void:
 		if not editor.visible:
 			Spellbook.save_slots(slots))
@@ -83,7 +83,7 @@ func _process(delta: float) -> void:
 	elif quick.visible:
 		quick.set_status("")
 	hud.visible_parts(not editor.visible)
-	var under := _object_at(view.get_global_mouse_position())
+	var under := sim.object_at(view.get_global_mouse_position())
 	var tip := "" if editor.visible or under == null else _describe(under)
 	hud.tooltip(tip, view.get_global_mouse_position())
 
@@ -124,7 +124,7 @@ func _cast(spell: Dictionary, aim: Vector2, slot: int) -> void:
 	# object under it, There the spot. The rest are asked for.
 	if not nouns.is_empty():
 		var first: String = nouns[0]["ref"]
-		var under := _object_at(aim)
+		var under := sim.object_at(aim)
 		if first == "there":
 			_on_picked(aim)
 			return
@@ -198,16 +198,6 @@ func _describe(o: WorldObject) -> String:
 	return "[font_size=13]%s[/font_size]" % text
 
 
-## The Thing or mana under `at` (spells are picked with Chosen), or null.
-func _object_at(at: Vector2) -> WorldObject:
-	var best: WorldObject = null
-	for o in sim.objects:
-		if not o.dead and o.spell == null and not o.has_tag("place") and at.distance_to(o.pos) <= o.radius + 4.0 \
-				and (best == null or at.distance_to(o.pos) < at.distance_to(best.pos)):
-			best = o
-	return best
-
-
 func _input(event: InputEvent) -> void:
 	if not (event is InputEventKey and event.pressed and not event.echo):
 		return
@@ -239,6 +229,11 @@ func _unhandled_input(event: InputEvent) -> void:
 	if _picking() in ["this", "there"]:
 		_handle_world_pick(event)
 		return
+	if quick.visible and event is InputEventMouseButton and event.pressed \
+			and event.button_index == MOUSE_BUTTON_LEFT:
+		quick.submit()  # cast what's typed where clicked: This is what's there
+		get_viewport().set_input_as_handled()
+		return
 	if event is InputEventKey and event.pressed and not event.echo:
 		var slot: int = 9 if event.keycode == KEY_0 else event.keycode - KEY_1
 		if slot >= 0 and slot < mini(slots.size(), 10):
@@ -263,7 +258,7 @@ func _handle_world_pick(event: InputEvent) -> void:
 		if _picking() == "there":
 			_on_picked(at)
 			return
-		var o := _object_at(at)
+		var o := sim.object_at(at)
 		if o != null:
 			_on_picked(o.id)
 

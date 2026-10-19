@@ -36,7 +36,8 @@ func _changed() -> void:
 # --- Building chips ----------------------------------------------------------
 
 ## A word chip: a button in `word`'s mana color that opens `items`, a menu of
-## [label, action] and [label, sub-items] entries.
+## [label, action] and [label, sub-items] entries. The entry for the word as
+## it is now is ticked, and so is the submenu it's in.
 func _chip(text: String, word: String, items: Array) -> MenuButton:
 	var chip := MenuButton.new()
 	chip.text = text
@@ -48,7 +49,7 @@ func _chip(text: String, word: String, items: Array) -> MenuButton:
 	chip.add_theme_stylebox_override("normal", _chip_style(color, 0.10))
 	chip.add_theme_stylebox_override("hover", _chip_style(color, 0.22))
 	chip.add_theme_stylebox_override("pressed", _chip_style(color, 0.30))
-	_fill_menu(chip.get_popup(), items)
+	_fill_menu(chip.get_popup(), items, text)
 	add_child(chip)
 	return chip
 
@@ -64,20 +65,30 @@ static func _chip_style(color: Color, alpha: float) -> StyleBoxFlat:
 	return style
 
 
-func _fill_menu(popup: PopupMenu, items: Array) -> void:
+## Fills `popup` with `items`; returns whether one of them is `current`.
+func _fill_menu(popup: PopupMenu, items: Array, current: String) -> bool:
 	assert(items.size() <= 5, "a menu has at most five entries")
 	var actions := []
+	var found := false
 	for item in items:
+		var here := false
 		if item[1] is Callable:
 			popup.add_item(item[0], actions.size())
 			actions.append(item[1])
+			var label: String = item[0].to_lower()
+			here = label == current.to_lower() or current.to_lower().ends_with(" " + label)  # "up to 2"
 		else:
 			var sub := PopupMenu.new()
-			_fill_menu(sub, item[1])
+			here = _fill_menu(sub, item[1], current)
 			popup.add_submenu_node_item(item[0], sub, -1)
+		if here:
+			popup.set_item_as_radio_checkable(popup.item_count - 1, true)
+			popup.set_item_checked(popup.item_count - 1, true)
+			found = true
 	popup.id_pressed.connect(func(id: int) -> void:
 		actions[id].call()
 		_changed())
+	return found
 
 
 ## Plain text between chips: punctuation and free words.

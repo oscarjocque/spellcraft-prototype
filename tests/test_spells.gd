@@ -1057,13 +1057,26 @@ func test_parse_typed() -> void:
 		"mark moving stones": "Mark (Closest Moving Stone).",
 		"move stone to player": "Move (Closest Stone) to (Closest Player).",
 		"move all stones within 2 of me to there": "Move (All Stone within 2 m of Me) to There.",
+		# What a verb acts on defaults to This, where Move moves it to There.
+		"destroy": "Destroy This.",
+		"mark, up to 2": "Mark This, up to 2.",
+		"move": "Move This to There.",
+		"move stone": "Move (Closest Stone) to There.",
+		"move to me": "Move This to Me.",
+		"hold": "Hold This.",
+		# Slips are forgiven when nothing reads without them.
+		"mvoe stoen to me": "Move (Closest Stone) to Me.",
+		"destory fier": "Destroy (Closest Fire).",
+		"craete wod": "Create Wood.",
+		"move ths to there": "Move This to There.",
+		"mark all movng stones": "Mark (All Moving Stone).",
 	}
 	for typed in cases:
 		var r := SpellParser.parse(typed)
 		var got: String = SpellGrammar.to_text(r["ast"]) if r.has("ast") else "error: " + r["error"]
 		check(got == cases[typed], "\"%s\" reads as %s (got %s)" % [typed, cases[typed], got])
-	check(SpellParser.parse("move closest stone").has("error"), "An unfinished spell is an error")
-	check("to" in SpellParser.parse("move closest stone").get("error", ""), "...saying what could come next")
+	check(SpellParser.parse("move all").has("error"), "An unfinished spell is an error")
+	check("stone" in SpellParser.parse("move all").get("error", ""), "...saying what could come next")
 	check(SpellParser.parse("move banana to me").has("error"), "Words that don't fit are an error")
 	check(SpellParser.parse("alternate 2 2").has("ast"), "Slots aren't checked until casting (they're copied in then)")
 
@@ -1075,6 +1088,12 @@ func test_suggest() -> void:
 	check(SpellParser.suggest("destroy closest fire ").has("up"), "A finished spell suggests adverbs")
 	check(SpellParser.suggest("create ") == ["fire", "water", "wood", "stone", "spell"], "Create suggests what to create")
 	check(SpellParser.suggest("move banana ").is_empty(), "Nothing fits after a mistake")
+	check(SpellParser.suggest("move closest ").slice(0, 2) == ["stone", "fire"], "After a picker: things before adjectives")
+	check(SpellParser.suggest("destroy fier") == ["fire"], "A slip suggests the word it nearly is")
+	check(SpellParser.suggest("destroy wa") == ["water"], "A thing on its own is suggested too")
+	check(SpellParser.suggest("destory wa") == ["water"], "A slip earlier on still gets suggestions")
+	check(not SpellParser._slip("me", "mine") and not SpellParser._slip("tone", "stone"),
+			"Short words and wrong first letters aren't slips")
 	for text in ["", "m", "move ", "move closest ", "destroy all fire within "]:
 		check(SpellParser.suggest(text).size() <= 5, "Never more than five suggestions")
 
@@ -1148,7 +1167,15 @@ func test_preview() -> void:
 		"...or that the spell would wait")
 	var picked: Dictionary = SpellParser.parse("destroy this")["ast"]
 	check(SpellPreview.describe(picked, SpellPreview.targets(sim, p, picked, Vector2.ZERO)) == "",
-		"...and nothing when it can't know before casting")
+		"...and nothing when it can't know before casting (nothing is under the mouse for This)")
+	check(SpellPreview.targets(sim, p, picked, near.pos)["what"] == [near], "The first This is under the mouse")
+	var there: Dictionary = SpellParser.parse("move stone to there")["ast"]
+	check(SpellPreview.targets(sim, p, there, Vector2(50, 60))["to"] == [Vector2(50, 60)],
+		"The first There is the mouse")
+	var second: Dictionary = SpellParser.parse("move this to there")["ast"]
+	check(SpellPreview.targets(sim, p, second, near.pos)["to"] == null, "A second pick isn't known")
+	var chosen: Dictionary = SpellParser.parse("move chosen to there")["ast"]
+	check(SpellPreview.targets(sim, p, chosen, near.pos)["to"] == null, "...even after a Chosen")
 
 
 func test_spellbook_saves() -> void:
