@@ -6,6 +6,7 @@ var _top: RichTextLabel
 var _bottom: RichTextLabel
 var _inventory: RichTextLabel
 var _prompt: RichTextLabel
+var _tip: RichTextLabel
 
 
 func _ready() -> void:
@@ -16,11 +17,13 @@ func _ready() -> void:
 	_prompt = _make_label(Vector2(340, 60))
 	_prompt.size.x = 600
 	_prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	_tip = _make_label(Vector2.ZERO)
+	_tip.size.x = 360
 
 
 ## `prompt` asks the player to pick something for the spell being cast.
 func refresh(sim: Simulation, player: WorldObject, slots: Array, selected: int, prompt: String) -> void:
-	_prompt.text = "[b][color=#ffd34d]%s[/color][/b]" % prompt if prompt != "" else ""
+	_show_text(_prompt, prompt)
 	var mana := "[b]Mana[/b]  "
 	if player.has_tag("infinite_mana"):
 		mana += "infinite"
@@ -33,7 +36,7 @@ func refresh(sim: Simulation, player: WorldObject, slots: Array, selected: int, 
 		if o.spell != null:
 			spells += 1
 	mana += "\nActive spells: %d    Health: %d" % [spells, player.health]
-	_top.text = mana
+	_show_text(_top, mana)
 
 	var text := ""
 	for i in slots.size():
@@ -43,7 +46,7 @@ func refresh(sim: Simulation, player: WorldObject, slots: Array, selected: int, 
 	for m in sim.messages:
 		text += "[color=#ff8a8a]%s[/color]\n" % m
 	text += "[color=#8a8f98]WASD move · 1–0 cast toward the mouse · Enter type a spell · Tab spellbook · Space drop a spell · F1 words · R reset[/color]"
-	_bottom.text = text
+	_show_text(_bottom, text)
 
 	var inv := "[b]Attached spells[/b]  [color=#8a8f98]Chosen picks from these[/color]\n"
 	var attached := sim.inventory(player)
@@ -51,7 +54,19 @@ func refresh(sim: Simulation, player: WorldObject, slots: Array, selected: int, 
 		inv += "[color=#8a8f98]none[/color]"
 	for i in attached.size():
 		inv += "%d  %s\n" % [i + 1, SpellText.bbcode(attached[i].spell.ast)]
-	_inventory.text = inv
+	_show_text(_inventory, inv)
+
+
+## A label's text, set only when it changed (RichTextLabel re-parses on set).
+static func _show_text(label: RichTextLabel, text: String) -> void:
+	if label.text != text:
+		label.text = text
+
+
+## Shows `bbcode` by the mouse at `at`, or nothing if it's "".
+func tooltip(bbcode: String, at: Vector2) -> void:
+	_show_text(_tip, bbcode)
+	_tip.position = at + Vector2(16, 12)
 
 
 ## Hides the slot list and inventory (under the spellbook, which shows them).

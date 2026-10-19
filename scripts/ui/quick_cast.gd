@@ -24,7 +24,7 @@ func _ready() -> void:
 	var box := VBoxContainer.new()
 	add_child(box)
 	var title := Label.new()
-	title.text = "Cast a spell   ·   Enter cast   ·   Ctrl+1–0 save to slot   ·   ↑↓ earlier spells   ·   F1 words   ·   Esc close"
+	title.text = "Cast a spell   ·   Enter cast   ·   Shift+Enter cast, keep typing   ·   Ctrl+1–0 save to slot   ·   ↑↓ earlier spells   ·   F1 words   ·   Esc close"
 	title.add_theme_font_size_override("font_size", 12)
 	title.add_theme_color_override("font_color", Color("8a8f98"))
 	box.add_child(title)
@@ -72,7 +72,11 @@ func _remember(text: String) -> void:
 
 func _on_submitted(ast: Dictionary) -> void:
 	_remember(input.field.text.strip_edges())
-	close()
+	if Input.is_key_pressed(KEY_SHIFT):
+		input.set_text("")  # Shift+Enter: cast and keep typing
+		input.field.grab_focus.call_deferred()
+	else:
+		close()
 	cast.emit(ast)
 
 

@@ -75,6 +75,9 @@ func _process(delta: float) -> void:
 	elif quick.visible:
 		quick.set_status("")
 	hud.visible_parts(not editor.visible)
+	var under := _object_at(view.get_global_mouse_position())
+	var tip := "" if editor.visible or under == null else _describe(under)
+	hud.tooltip(tip, view.get_global_mouse_position())
 
 
 func _command() -> Dictionary:
@@ -144,8 +147,8 @@ func _prompt() -> String:
 	if what == "" or what == "chosen":
 		return ""
 	var nouns: Array = _casting["nouns"]
-	return "%s\nClick %s for %s (%d of %d) · Esc cancels" % [
-		SpellGrammar.to_text(_casting["ast"]), "an object" if what == "this" else "a place",
+	return "%s\n[b][color=#ffd34d]Click %s for %s (%d of %d)[/color][/b] [color=#8a8f98]· Esc cancels[/color]" % [
+		SpellText.bbcode(_casting["ast"]), "an object" if what == "this" else "a place",
 		what.capitalize(), _casting["index"] + 1, nouns.size()]
 
 
@@ -170,6 +173,22 @@ func _cancel_cast() -> void:
 	picker.hide()
 
 
+## The words that describe `o` from the player's side, colored by mana.
+func _describe(o: WorldObject) -> String:
+	var words: Array[String] = []
+	var kind: String = "player" if o.has_tag("player") else "mana" if o.has_tag("mana") else o.material
+	if o == player:
+		kind = "me"
+	words.append("[color=#%s]%s[/color]" % [SpellText.color_of(kind).to_html(false), kind.capitalize()])
+	for adj in SpellGrammar.ADJECTIVES:
+		if o != player and sim.has_adjective(o, adj, player):
+			words.append("[color=#%s]%s[/color]" % [SpellText.color_of(adj).to_html(false), adj])
+	var text := " · ".join(words)
+	if o.health < o.max_health:
+		text += "  [color=#8a8f98]%d/%d[/color]" % [o.health, o.max_health]
+	return "[font_size=13]%s[/font_size]" % text
+
+
 ## The Thing or mana under `at` (spells are picked with Chosen), or null.
 func _object_at(at: Vector2) -> WorldObject:
 	var best: WorldObject = null
@@ -190,7 +209,10 @@ func _input(event: InputEvent) -> void:
 	if get_viewport().gui_get_focus_owner() is LineEdit:
 		return  # typing: Tab completes, Enter submits
 	# Handled here, before the editor's controls can take Tab for focus.
-	if event.keycode == KEY_TAB and not picker.visible:
+	if event.keycode == KEY_ESCAPE and editor.visible:
+		editor.hide()
+		get_viewport().set_input_as_handled()
+	elif event.keycode == KEY_TAB and not picker.visible:
 		if editor.visible:
 			editor.hide()
 		else:

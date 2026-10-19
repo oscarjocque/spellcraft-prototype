@@ -48,6 +48,9 @@ static func on_contact(sim: Simulation, a: WorldObject, b: WorldObject) -> void:
 
 	# Collectors pick up mana until their storage for that color is full.
 	if a.has_tag("collector") and b.has_tag("mana") and not b.dead:
+		if a.has_tag("infinite_mana"):
+			b.dead = true  # storage that never runs out takes it all
+			return
 		var have: float = a.mana_store.get(b.mana_color, 0.0)
 		var take := minf(b.mana_amount, Simulation.STORE_CAP - have)
 		if take > 0.0:

@@ -249,8 +249,12 @@ func _noun(i: int) -> Array:
 			if _is(n[1], ")"):
 				out.append([n[0], n[1] + 1])
 		return out
-	# A thing on its own (with any adjectives) is the closest one.
-	out.append_array(_picked("closest", [], i, false))
+	# A thing on its own (with any adjectives) is the closest one. A noun word
+	# typed in full comes first; otherwise the closest thing does.
+	var full := i < _tokens.size() and _tokens[i] in NOUN_WORDS
+	var things := _picked("closest", [], i, false)
+	if not full:
+		out.append_array(things)
 	for w in _word(i, NOUN_WORDS):
 		if w in SpellGrammar.REFS:
 			out.append([{"ref": w}, i + 1])
@@ -262,6 +266,8 @@ func _noun(i: int) -> Array:
 				k += 1
 			for n in _noun(k):
 				out.append([{RELATION_WORDS[w]: n[0]}, n[1]])
+	if full:
+		out.append_array(things)
 	return out
 
 

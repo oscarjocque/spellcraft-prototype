@@ -40,7 +40,9 @@ and a line says how much, or that it would wait.
 While you type, up to five words that could come next are suggested (**Tab**
 takes the first) and the spell is shown as it's understood, colored by the
 mana each word costs, with its cost. **Ctrl+1–0** saves it to that slot
-instead; **↑/↓** recall spells typed before.
+instead, **Shift+Enter** casts and keeps the bar open for the next; **↑/↓**
+recall spells typed before. Pointing at something shows the words that
+describe it (Stone · moving · mine).
 
 **Or click them.** **Tab** opens the spellbook: your ten slots on the left,
 the chosen one on the right, where you can type it the same way or click its
