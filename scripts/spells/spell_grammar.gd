@@ -1,54 +1,105 @@
 class_name SpellGrammar
 extends RefCounted
 ## Spells as data. A spell is a sentence: a verb with its noun slots, or an
-## incomplete one: a selector cast on its own, which the caster then holds.
+## incomplete one, a noun on its own, which the caster then holds.
 ##
-##   {"verb": "create", "what": {"material": "wood"}}
-##   {"verb": "create", "what": {"spell": SPELL}}     # creates another spell
+##   {"verb": "create", "what": {"material": "wood"}, "at": NOUN?}
+##   {"verb": "create", "what": {"spell": SPELL}, "at": NOUN?}   # creates spells
 ##   {"verb": "destroy", "what": NOUN}
 ##   {"verb": "move", "what": NOUN, "to": NOUN}
-##   {"verb": "select", "qualifier": "player"}   # a Closest selector on its own
+##   {"verb": "mark", "what": NOUN}
+##   {"verb": "select", "what": NOUN}   # Hold: a noun on its own, re-read every tick
+##   {"verb": "alternate", "first": SPELL, "second": SPELL}
 ##
-## NOUN is {"ref": "me"}, {"ref": "it"}, {"ref": "held"}, {"ref": "chosen"},
-## {"closest": QUALIFIER} or {"target_of": NOUN}.
-## Held is the selector the caster is holding; the spell takes it over. An
-## inline Closest chooses once, when the spell is cast; a held one keeps
-## choosing, and the spell follows whatever it picks now.
-## Chosen is a spell from the caster's inventory of attached spells, picked
-## for each Chosen when the spell is cast and stored in it as "id". Target of a spell is what that spell acts on right now (a Create's
-## product, a selector's pick), re-checked every tick.
-## Every block is one word and costs mana of one color. A created spell pays
-## its own drain: the spell creating it must carry that mana as a reserve
-## (see `payload`).
+## NOUN is one of:
+##   {"ref": REF}                 Me, It, Chosen, This, There, Aimed
+##   {PICKER: QUALIFIER, "adj": [ADJECTIVE...]?, "within": METERS?, "from": NOUN?}
+##                                e.g. (Closest Moving Stone within 3 m of There)
+##   {RELATION: NOUN}             (Target of X), (Caster of X), ...
+##
+## It is what the other spell of an Alternate acted on in its last turn (and
+## nothing outside an Alternate). Chosen, This and There are picked by the caster for each use when casting,
+## and the pick is stored in the noun: "id" for Chosen and This, "at" for There.
+## A picker inside a spell chooses once, when the spell is cast; a held one
+## keeps choosing. Relations are re-read every tick, so (Target of Chosen),
+## with a held noun chosen, follows whatever it holds now.
+## Every word costs mana of one color. A created spell pays its own drain:
+## the spell creating it must carry that mana as a reserve (see `payload`).
 
-const VERBS := ["create", "destroy", "move", "select"]
+const VERBS := ["create", "destroy", "move", "mark", "select", "alternate"]
 const MATERIALS := ["fire", "water", "wood", "stone"]
-const QUALIFIERS := ["fire", "water", "wood", "stone", "spell", "player", "mana"]
-const REFS := ["me", "it", "held", "chosen"]
+const QUALIFIERS := ["thing", "fire", "water", "wood", "stone", "spell", "player", "mana"]
+const REFS := ["me", "it", "chosen", "this", "there", "aimed"]
+## Refs the caster picks when casting.
+const PICKED_REFS := ["chosen", "this", "there"]
+const PICKERS := ["closest", "farthest", "random", "all"]
+const ADJECTIVES := ["moving", "burning", "mine", "theirs", "marked"]
+const RELATIONS := ["target_of", "caster_of", "maker_of", "products_of"]
+const DISTANCES := [1, 2, 3, 5]  # meters, for "within"
+const PIXELS_PER_METER := 40.0
 const COLORS := ["red", "blue", "green", "violet"]
 const CREATED_SPELL_SECONDS := 60.0  # how long a created spell's mana must last
 const CREATED_SPELLS := 3  # how many spells one Create Spell makes
 
 ## First sketch from the design doc, to be tuned.
 const BLOCK_COLOR := {
-	"create": "red", "fire": "red",
+	"create": "red", "fire": "red", "burning": "red", "at": "red",
 	"water": "blue", "mana": "blue",
-	"move": "green", "stone": "green", "wood": "green",
-	"destroy": "violet", "closest": "violet", "spell": "violet", "player": "violet",
-	"me": "violet", "it": "violet", "held": "violet", "chosen": "violet", "target_of": "violet",
+	"move": "green", "stone": "green", "wood": "green", "moving": "green",
+	"there": "green", "aimed": "green", "within": "green", "from": "green",
+	"destroy": "violet", "mark": "violet", "alternate": "violet", "it": "violet", "spell": "violet", "player": "violet", "thing": "violet",
+	"closest": "violet", "farthest": "violet", "random": "violet", "all": "violet",
+	"me": "violet", "chosen": "violet", "this": "violet",
+	"mine": "violet", "theirs": "violet", "marked": "violet",
+	"target_of": "violet", "caster_of": "violet", "maker_of": "violet", "products_of": "violet",
 }
 
 ## Mana per second each block drains while its spell is active.
 const DRAIN_PER_BLOCK := 0.2
 
 
+## The noun a held spell holds. (Older spells wrote {"qualifier": Q}.)
+static func held_noun(ast: Dictionary) -> Dictionary:
+	if ast.get("what") is Dictionary:
+		return ast["what"]
+	return {"closest": ast.get("qualifier", "")}
+
+
+## The picker word of a selector noun, or "" if the noun isn't a selector.
+static func picker_of(noun: Dictionary) -> String:
+	for p in PICKERS:
+		if noun.has(p):
+			return p
+	return ""
+
+
+## The relation word of a relation noun, or "".
+static func relation_of(noun: Dictionary) -> String:
+	for r in RELATIONS:
+		if noun.has(r):
+			return r
+	return ""
+
+
 ## Every word of the spell, including the words of any spell it creates.
 static func blocks(ast: Dictionary) -> Array[String]:
+	if ast.get("verb", "") == "alternate":
+		var all: Array[String] = ["alternate"]
+		all.append_array(blocks(ast["first"]))
+		all.append_array(blocks(ast["second"]))
+		return all
 	var out := own_blocks(ast)
 	var inner := created_spell(ast)
 	if not inner.is_empty():
 		out.append_array(blocks(inner))
 	return out
+
+
+## The spells an Alternate runs, or [].
+static func inner_spells(ast: Dictionary) -> Array[Dictionary]:
+	if ast.get("verb", "") == "alternate":
+		return [ast["first"], ast["second"]]
+	return []
 
 
 ## The words this spell pays for itself, without the spell it creates.
@@ -58,28 +109,45 @@ static func own_blocks(ast: Dictionary) -> Array[String]:
 		"create":
 			out.append("create")
 			out.append("spell" if ast["what"].has("spell") else ast["what"]["material"])
-		"destroy":
-			out.append("destroy")
+			if ast.get("at") is Dictionary:
+				out.append("at")
+				_noun_blocks(ast["at"], out)
+		"destroy", "mark":
+			out.append(ast["verb"])
 			_noun_blocks(ast["what"], out)
 		"move":
 			out.append("move")
 			_noun_blocks(ast["what"], out)
 			_noun_blocks(ast["to"], out)
 		"select":
-			out.append("closest")
-			out.append(ast["qualifier"])
+			_noun_blocks(held_noun(ast), out)
+		"alternate":
+			# It runs both spells, so it pays for both.
+			out.append("alternate")
+			out.append_array(own_blocks(ast["first"]))
+			out.append_array(own_blocks(ast["second"]))
 	return out
 
 
 static func _noun_blocks(noun: Dictionary, out: Array[String]) -> void:
 	if noun.has("ref"):
 		out.append(noun["ref"])
-	elif noun.has("target_of"):
-		out.append("target_of")
-		_noun_blocks(noun["target_of"], out)
-	else:
-		out.append("closest")
-		out.append(noun["closest"])
+		return
+	var rel := relation_of(noun)
+	if rel != "":
+		out.append(rel)
+		_noun_blocks(noun[rel], out)
+		return
+	var picker := picker_of(noun)
+	out.append(picker)
+	for a in noun.get("adj", []):
+		out.append(a)
+	out.append(noun[picker])
+	if noun.has("within"):
+		out.append("within")
+	if noun.get("from") is Dictionary:
+		out.append("from")
+		_noun_blocks(noun["from"], out)
 
 
 ## The spell this one creates, or {} if it creates none.
@@ -89,7 +157,8 @@ static func created_spell(ast: Dictionary) -> Dictionary:
 	return {}
 
 
-## Mana per second this spell's own blocks drain while it is active.
+## Mana per second this spell's own blocks drain while it is active (acting on
+## one target; acting on several costs this much per target).
 static func drain_per_second(ast: Dictionary) -> Dictionary:
 	var drain := {}
 	for b in own_blocks(ast):
@@ -101,12 +170,18 @@ static func drain_per_second(ast: Dictionary) -> Dictionary:
 ## Mana a spell must carry in reserve for the spells it creates: one `share`
 ## for each of the CREATED_SPELLS it makes.
 static func payload(ast: Dictionary) -> Dictionary:
+	var need := {}
+	# An Alternate carries one turn's worth for each of its spells.
+	for sub in inner_spells(ast):
+		var p := payload(sub)
+		for c in p:
+			need[c] = need.get(c, 0.0) + p[c]
 	var inner := created_spell(ast)
 	if inner.is_empty():
-		return {}
-	var need := share(inner)
-	for c in need:
-		need[c] *= CREATED_SPELLS
+		return need
+	var one := share(inner)
+	for c in one:
+		need[c] = need.get(c, 0.0) + one[c] * CREATED_SPELLS
 	return need
 
 
@@ -128,21 +203,30 @@ static func validate(ast: Dictionary) -> String:
 			var what: Variant = ast.get("what")
 			if not what is Dictionary:
 				return "Create needs a material or a spell."
+			if ast.has("at") and not _valid_noun(ast["at"]):
+				return "Create at needs somewhere to create."
 			if what.has("spell"):
 				if not what["spell"] is Dictionary:
 					return "Create Spell needs a description of the spell."
 				return validate(what["spell"])
 			if not what.get("material", "") in MATERIALS:
 				return "Create needs a material or a spell."
-		"destroy":
+		"destroy", "mark":
 			if not _valid_noun(ast.get("what")):
-				return "Destroy needs something to destroy."
+				return "%s needs something to act on." % verb.capitalize()
 		"move":
 			if not (_valid_noun(ast.get("what")) and _valid_noun(ast.get("to"))):
 				return "Move needs something to move and somewhere to move it."
 		"select":
-			if not ast.get("qualifier", "") in QUALIFIERS:
-				return "Closest needs a qualifier."
+			if not _valid_noun(held_noun(ast)):
+				return "Hold needs something to hold."
+		"alternate":
+			for key in ["first", "second"]:
+				if not ast.get(key) is Dictionary:
+					return "Alternate needs two spells."
+				var err := validate(ast[key])
+				if err != "":
+					return err
 		_:
 			return "Unknown verb: %s" % verb
 	return ""
@@ -153,29 +237,50 @@ static func _valid_noun(noun: Variant) -> bool:
 		return false
 	if noun.has("ref"):
 		return noun["ref"] in REFS
-	if noun.has("target_of"):
-		return _valid_noun(noun["target_of"])
-	return noun.get("closest", "") in QUALIFIERS
+	var rel := relation_of(noun)
+	if rel != "":
+		return _valid_noun(noun[rel])
+	var picker := picker_of(noun)
+	if picker == "" or not noun[picker] in QUALIFIERS:
+		return false
+	if not noun.get("adj", []).all(func(a: Variant) -> bool: return a in ADJECTIVES):
+		return false
+	if noun.has("within") and not noun["within"] in DISTANCES:
+		return false
+	return not noun.has("from") or _valid_noun(noun["from"])
 
 
-## Every Chosen noun in the spell, including in the spells it creates, in
-## reading order: the order the caster is asked to pick them in.
-static func chosen_nouns(ast: Dictionary) -> Array[Dictionary]:
+## Every noun the caster picks when casting (Chosen, This, There), including
+## those in the spells it creates, in reading order: the order they're asked.
+static func cast_picks(ast: Dictionary) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
-	for key in ["what", "to"]:
-		if ast.get(key) is Dictionary:
-			_chosen_in(ast[key], out)
+	match ast.get("verb", ""):
+		"create":
+			if ast.get("at") is Dictionary:
+				_picks_in(ast["at"], out)
+		"select":
+			_picks_in(held_noun(ast), out)
+		"alternate":
+			out.append_array(cast_picks(ast["first"]))
+			out.append_array(cast_picks(ast["second"]))
+		_:
+			for key in ["what", "to"]:
+				if ast.get(key) is Dictionary:
+					_picks_in(ast[key], out)
 	var inner := created_spell(ast)
 	if not inner.is_empty():
-		out.append_array(chosen_nouns(inner))
+		out.append_array(cast_picks(inner))
 	return out
 
 
-static func _chosen_in(noun: Dictionary, out: Array[Dictionary]) -> void:
-	if noun.get("ref", "") == "chosen":
+static func _picks_in(noun: Dictionary, out: Array[Dictionary]) -> void:
+	if noun.get("ref", "") in PICKED_REFS:
 		out.append(noun)
-	elif noun.has("target_of"):
-		_chosen_in(noun["target_of"], out)
+	var rel := relation_of(noun)
+	if rel != "":
+		_picks_in(noun[rel], out)
+	elif noun.get("from") is Dictionary:
+		_picks_in(noun["from"], out)
 
 
 static func to_text(ast: Dictionary) -> String:
@@ -186,21 +291,37 @@ static func _sentence(ast: Dictionary) -> String:
 	match ast.get("verb", ""):
 		"create":
 			var inner := created_spell(ast)
-			if not inner.is_empty():
-				return "Create Spell [%s]" % _sentence(inner)
-			return "Create %s" % ast["what"]["material"].capitalize()
-		"destroy":
-			return "Destroy %s" % _noun_text(ast["what"])
+			var text := "Create Spell [%s]" % _sentence(inner) if not inner.is_empty() \
+					else "Create %s" % ast["what"]["material"].capitalize()
+			if ast.get("at") is Dictionary:
+				text += " at %s" % noun_text(ast["at"])
+			return text
+		"destroy", "mark":
+			return "%s %s" % [ast["verb"].capitalize(), noun_text(ast["what"])]
 		"move":
-			return "Move %s to %s" % [_noun_text(ast["what"]), _noun_text(ast["to"])]
+			return "Move %s to %s" % [noun_text(ast["what"]), noun_text(ast["to"])]
 		"select":
-			return "Closest %s" % ast["qualifier"].capitalize()
+			return "Hold %s" % noun_text(held_noun(ast))
+		"alternate":
+			return "Alternate [%s] [%s]" % [_sentence(ast["first"]), _sentence(ast["second"])]
 	return "?"
 
 
-static func _noun_text(noun: Dictionary) -> String:
+static func noun_text(noun: Dictionary) -> String:
 	if noun.has("ref"):
 		return noun["ref"].capitalize()
-	if noun.has("target_of"):
-		return "(Target of %s)" % _noun_text(noun["target_of"])
-	return "(Closest %s)" % noun["closest"].capitalize()
+	var rel := relation_of(noun)
+	if rel != "":
+		return "(%s %s)" % [rel.capitalize().replace(" Of", " of"), noun_text(noun[rel])]
+	var picker := picker_of(noun)
+	var words: Array[String] = [picker.capitalize()]
+	for a in noun.get("adj", []):
+		words.append(a.capitalize())
+	words.append(noun[picker].capitalize())
+	if noun.has("within"):
+		words.append("within %d m" % noun["within"])
+		if noun.get("from") is Dictionary:
+			words.append("of " + noun_text(noun["from"]))
+	elif noun.get("from") is Dictionary:
+		words.append("to " + noun_text(noun["from"]))
+	return "(%s)" % " ".join(words)

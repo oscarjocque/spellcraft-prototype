@@ -14,7 +14,7 @@ var slots: Array = Sandbox.PRESETS.duplicate(true)
 var selected := 0
 var _accum := 0.0
 var _pending_cast := {}  # {"ast", "aim"} to send with the next tick's command
-var _casting := {}  # a cast waiting on Chosen picks: {"ast", "aim", "nouns", "index"}
+var _casting := {}  # a cast waiting on picks: {"ast", "aim", "nouns", "index"}
 
 
 func _ready() -> void:
@@ -22,8 +22,8 @@ func _ready() -> void:
 	_bind("move_right", [KEY_D, KEY_RIGHT])
 	_bind("move_up", [KEY_W, KEY_UP])
 	_bind("move_down", [KEY_S, KEY_DOWN])
-	picker.picked.connect(_on_chosen_picked)
-	picker.cancelled.connect(func() -> void: _casting = {})
+	picker.picked.connect(_on_picked)
+	picker.cancelled.connect(_cancel_cast)
 	_reset()
 
 
@@ -38,14 +38,14 @@ func _reset() -> void:
 
 
 func _process(delta: float) -> void:
-	# The simulation pauses while the editor or a Chosen pick is open.
-	if not editor.visible and not picker.visible:
+	# The simulation pauses while the editor is open, but not while picking.
+	if not editor.visible:
 		_accum = minf(_accum + delta, 0.25)
 		while _accum >= Simulation.DT:
 			_accum -= Simulation.DT
 			sim.step({player.controller: _command()})
 	view.alpha = _accum / Simulation.DT
-	hud.refresh(sim, player, slots, selected)
+	hud.refresh(sim, player, slots, selected, _prompt())
 
 
 func _command() -> Dictionary:
@@ -60,32 +60,71 @@ func _command() -> Dictionary:
 	return cmd
 
 
-## Casts the selected slot toward `aim`, first asking, in a window for each
-## Chosen in it, which attached spell that Chosen means.
+## Casts the selected slot toward `aim`, first having the player pick, one
+## after another and while the game runs, what each Chosen, This and There
+## in it means: Chosen from a window, This and There by clicking the world.
 func _begin_cast(aim: Vector2) -> void:
 	var ast: Dictionary = slots[selected].duplicate(true)
-	var nouns := SpellGrammar.chosen_nouns(ast)
+	var nouns := SpellGrammar.cast_picks(ast)
 	if nouns.is_empty():
 		_pending_cast = {"ast": ast, "aim": aim}
 		return
 	_casting = {"ast": ast, "aim": aim, "nouns": nouns, "index": 0}
-	_ask_chosen()
+	_ask_next()
 
 
-func _ask_chosen() -> void:
+func _picking() -> String:
+	if _casting.is_empty():
+		return ""
+	return _casting["nouns"][_casting["index"]]["ref"]
+
+
+func _ask_next() -> void:
+	if _picking() == "chosen":
+		var nouns: Array = _casting["nouns"]
+		picker.ask(SpellGrammar.to_text(_casting["ast"]), _casting["index"] + 1, nouns.size(), sim.inventory(player))
+
+
+## What the HUD should ask for, if anything.
+func _prompt() -> String:
+	var what := _picking()
+	if what == "" or what == "chosen":
+		return ""
 	var nouns: Array = _casting["nouns"]
-	picker.ask(SpellGrammar.to_text(_casting["ast"]), _casting["index"] + 1, nouns.size(), sim.inventory(player))
+	return "%s\nClick %s for %s (%d of %d) · Esc cancels" % [
+		SpellGrammar.to_text(_casting["ast"]), "an object" if what == "this" else "a place",
+		what.capitalize(), _casting["index"] + 1, nouns.size()]
 
 
-func _on_chosen_picked(id: int) -> void:
-	var nouns: Array = _casting["nouns"]
-	nouns[_casting["index"]]["id"] = id
+## Fills in the current pick ("id" for Chosen and This, "at" for There) and
+## moves on to the next, casting once all are picked.
+func _on_picked(value: Variant) -> void:
+	var noun: Dictionary = _casting["nouns"][_casting["index"]]
+	if noun["ref"] == "there":
+		noun["at"] = value
+	else:
+		noun["id"] = value
 	_casting["index"] += 1
-	if _casting["index"] < nouns.size():
-		_ask_chosen()
+	if _casting["index"] < _casting["nouns"].size():
+		_ask_next()
 	else:
 		_pending_cast = {"ast": _casting["ast"], "aim": _casting["aim"]}
 		_casting = {}
+
+
+func _cancel_cast() -> void:
+	_casting = {}
+	picker.hide()
+
+
+## The Thing or mana under `at` (spells are picked with Chosen), or null.
+func _object_at(at: Vector2) -> WorldObject:
+	var best: WorldObject = null
+	for o in sim.objects:
+		if not o.dead and o.spell == null and not o.has_tag("place") and at.distance_to(o.pos) <= o.radius + 4.0 \
+				and (best == null or at.distance_to(o.pos) < at.distance_to(best.pos)):
+			best = o
+	return best
 
 
 func _input(event: InputEvent) -> void:
@@ -100,15 +139,34 @@ func _input(event: InputEvent) -> void:
 
 
 func _unhandled_input(event: InputEvent) -> void:
-	if editor.visible or picker.visible:
+	if editor.visible:
+		return
+	if _picking() in ["this", "there"]:
+		_handle_world_pick(event)
 		return
 	if event is InputEventKey and event.pressed and not event.echo:
-		if event.keycode >= KEY_1 and event.keycode < KEY_1 + slots.size():
-			selected = event.keycode - KEY_1
+		var slot: int = 9 if event.keycode == KEY_0 else event.keycode - KEY_1
+		if slot >= 0 and slot < mini(slots.size(), 10):
+			selected = slot
 		elif event.keycode == KEY_R:
 			_reset()
 	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		_begin_cast(view.get_global_mouse_position())
+		if _casting.is_empty():
+			_begin_cast(view.get_global_mouse_position())
+
+
+## While picking This or There: a click picks, Esc cancels the cast.
+func _handle_world_pick(event: InputEvent) -> void:
+	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
+		_cancel_cast()
+	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
+		var at := view.get_global_mouse_position()
+		if _picking() == "there":
+			_on_picked(at)
+			return
+		var o := _object_at(at)
+		if o != null:
+			_on_picked(o.id)
 
 
 static func _bind(action: StringName, keys: Array) -> void:

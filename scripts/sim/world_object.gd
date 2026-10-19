@@ -10,6 +10,7 @@ var tags := {}  # tag name -> true
 # Transform. Prototype 1 uses circles only.
 var pos := Vector2.ZERO
 var prev_pos := Vector2.ZERO  # position before this tick, for render smoothing
+var moved := Vector2.ZERO  # how far it moved last tick
 var home := Vector2.ZERO  # where a defeated player respawns
 var radius := 16.0
 
@@ -35,15 +36,20 @@ var mana_store := {}  # color -> amount
 # Behavior
 var controller := -1  # input slot of a player-controlled object
 var spell: Spell = null  # set on spell objects
-var last_it: WorldObject = null  # what "It" means in this caster's next spell
+var maker: WorldObject = null  # the spell that created this, if one did
+var bound_to: WorldObject = null  # this ends when that does
+var marks := {}  # caster id -> true, for the adjective Marked
 
 
 func has_tag(tag: String) -> bool:
 	return tags.has(tag)
 
 
-## Qualifiers match a material ("stone") or a tag ("player", "spell").
+## Qualifiers match a material ("stone") or a tag ("player", "spell"). A
+## Thing is any physical object: not a spell, mana or a place.
 func matches(qualifier: String) -> bool:
+	if qualifier == "thing":
+		return spell == null and not tags.has("mana") and not tags.has("place")
 	return material == qualifier or tags.has(qualifier)
 
 

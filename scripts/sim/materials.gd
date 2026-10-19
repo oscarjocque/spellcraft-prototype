@@ -57,6 +57,18 @@ static func make_mana(color: String, amount: float, pos: Vector2) -> WorldObject
 	return o
 
 
+## A spot in the world, made by There: invisible, weightless, and gone when
+## the spell that made it ends.
+static func make_place(pos: Vector2) -> WorldObject:
+	var o := WorldObject.new()
+	o.tags = {"place": true}
+	o.pos = pos
+	o.radius = 4.0
+	o.health = 1.0
+	o.max_health = 1.0
+	return o
+
+
 ## The world object a cast spell lives on.
 static func make_spell_host(pos: Vector2) -> WorldObject:
 	var o := WorldObject.new()

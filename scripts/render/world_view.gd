@@ -20,7 +20,9 @@ const VERB_COLOR := {
 	"create": Color("ff4d4d"),
 	"destroy": Color("b36bff"),
 	"move": Color("4dcc6a"),
+	"mark": Color("b36bff"),
 	"select": Color("e6e6e6"),
+	"alternate": Color("ffd34d"),
 }
 const PLAYER_COLOR := Color("e8e6df")
 const DUMMY_COLOR := Color("c9a227")
@@ -43,10 +45,14 @@ func _draw() -> void:
 			_draw_spell(o)
 		elif o.has_tag("mana"):
 			_draw_diamond(_p(o), o.radius, MANA_COLOR[o.mana_color])
+		elif o.has_tag("place"):
+			_draw_place(o)
 		elif o.has_tag("player"):
 			_draw_player(o)
 		else:
 			_draw_material(o)
+		if not o.marks.is_empty():
+			draw_circle(_p(o) + Vector2(0, -o.radius - 4), 3.0, MANA_COLOR["violet"])
 
 
 func _p(o: WorldObject) -> Vector2:
@@ -83,13 +89,20 @@ func _draw_spell(o: WorldObject) -> void:
 	var s := o.spell
 	var p := _p(o)
 	var color: Color = VERB_COLOR[s.ast["verb"]]
-	var target := s.target()
-	if target != null:
-		draw_line(p, _p(target), Color(color, 0.5), 1.5)
 	var dest := s.destination()
-	if dest != null and target != null:
-		draw_dashed_line(_p(target), _p(dest), Color(color, 0.5), 1.5, 6.0)
+	for target in s.targets():
+		draw_line(p, _p(target), Color(color, 0.5), 1.5)
+		if dest != null:
+			draw_dashed_line(_p(target), _p(dest), Color(color, 0.5), 1.5, 6.0)
 	_draw_diamond(p, o.radius + 2, color)
+
+
+## A place made by There: a small cross.
+func _draw_place(o: WorldObject) -> void:
+	var p := _p(o)
+	var c := Color(PLAYER_COLOR, 0.7)
+	draw_line(p + Vector2(-6, -6), p + Vector2(6, 6), c, 2.0)
+	draw_line(p + Vector2(-6, 6), p + Vector2(6, -6), c, 2.0)
 
 
 func _draw_diamond(p: Vector2, r: float, color: Color) -> void:

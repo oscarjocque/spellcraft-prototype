@@ -18,8 +18,9 @@ selector are enough to build spells that interact in ways nobody scripted.
 | Input | Action |
 | --- | --- |
 | WASD / arrows | Move |
-| 1–9 | Pick a spell slot |
-| Left click | Cast the selected spell toward the cursor |
+| 1–9, 0 | Pick a spell slot |
+| Left click | Cast the selected spell toward the cursor; while picking This or There, pick |
+| Esc | Cancel a cast that is waiting for picks |
 | Tab | Open or close the spell editor (pauses the simulation) |
 | R | Reset the sandbox |
 
@@ -32,73 +33,101 @@ diamonds to collect mana.
 
 | Block family | In the prototype |
 | --- | --- |
-| Verbs | Create, Destroy, Move |
-| Create's objects | Fire, Water, Wood, Stone, or Spell [*another spell*] |
-| Qualifiers | Fire, Water, Wood, Stone, Spell, Player, Mana |
-| Selectors | Closest (takes a qualifier), inside a spell or cast on its own |
-| References | Me, It, Held, Chosen, Target of *(noun)* |
+| Verbs | Create, Destroy, Move, Mark, Hold *(a noun on its own)*, Alternate [*spell*] [*spell*] |
+| Create's objects | Fire, Water, Wood, Stone, or Spell [*another spell*]; optionally *at (noun)* |
+| Qualifiers | Thing *(any physical object)*, Fire, Water, Wood, Stone, Spell, Player, Mana |
+| Pickers | Closest, Farthest, Random, All |
+| Adjectives | Moving, Burning, Mine, Theirs, Marked |
+| Picked when casting | Chosen *(an attached spell)*, This *(click an object)*, There *(click a place)* |
+| Other nouns | Me, Aimed, It *(inside an Alternate)* |
+| Relations | Target of, Caster of, Maker of, Products of |
 
-The preset slots cover every spell the design doc lists for this prototype:
+The preset slots (keys 1–9 and 0):
 
-| Slot | Spell | Name in the design doc |
+| Slot | Spell | Name |
 | --- | --- | --- |
 | 1 | Create Fire. | |
-| 2 | Create Water. | |
+| 2 | Alternate [Move (Closest Stone) to Me] [Move It to (Closest Player)]. | Juggle |
 | 3 | Create Wood. | Barrier |
 | 4 | Destroy (Closest Fire). | Extinguish |
 | 5 | Move (Closest Stone) to (Closest Player). | Boulder throw |
 | 6 | Destroy (Closest Spell). | Dispel |
-| 7 + 8 | Closest Player, then Move (Closest Stone) to Held. | Live tracker |
+| 7 + 8 | Hold (Closest Player), then Move (Closest Stone) to (Target of Chosen). | Live tracker |
 | 9 | Create Spell [Destroy (Closest Fire)]. | Fire warden |
+| 0 | Move This to There. | Telekinesis |
 
-To try a live tracker, cast 7, then 8. The stone chases whichever other player
-is closest to you, switching targets as you move, until its mana runs out.
+To try the live tracker, cast 7, then 8 and pick the held selector in the
+window. The stone chases whichever other player is closest to you, switching
+targets as you move.
 
-### Held selectors
+### Nouns
 
-Casting an incomplete spell, a bare selector like `Closest Player`, doesn't
-do anything by itself: you **hold** it. It stays attached to you, never picks
-you, and re-chooses every tick while its mana lasts.
+A noun says what a spell acts on. Spells read like sentences:
+`Move (All Moving Stone within 3 m of There) to Me`.
 
-The noun **Held** puts the selector you're holding into the next spell you
-cast that uses it. That spell then follows whatever the selector picks *now*,
-where an inline `(Closest Player)` would choose once at cast and stay locked.
-The taken selector belongs to that spell: you no longer hold it, and it ends
-when the spell ends. If you hold nothing, the spell waits and takes the next
-selector you hold.
+- **Pickers** choose by distance: **Closest**, **Farthest**, **Random** or
+  **All** of a qualifier, narrowed by any number of **adjectives** (Moving,
+  Burning, Mine = made by your spells, Theirs = someone else's, Marked = by
+  your Mark). Distance is measured from the spell, or **to** another noun
+  (`Closest Stone to There`), and can be limited **within** 1–5 m (of the
+  spell, or of a noun). A spell attached to you never picks you. Inside a
+  spell a picker chooses once, at cast; a held one (Hold) chooses again
+  every tick, and Random sticks with its pick while it still fits.
+- **Picked when casting:** **This** (click an object), **There** (click a
+  spot; it becomes an invisible place marker for as long as the spell lasts)
+  and **Chosen** (pick one of your attached spells in a window). Each use is
+  picked separately, in reading order; the game keeps running while you pick,
+  and Esc cancels the cast.
+- **Aimed** is the first object along the line from the spell toward where
+  you cast it. **Me** is you.
+- **Relations** are re-read every tick: **Target of** a spell is what it acts
+  on now (a held noun's value, a Create's newest product, what a Move or
+  Destroy acts on); **Caster of** is who cast it; **Maker of** an object is
+  the spell that created it; **Products of** a Create is everything it made.
+  They nest: `(Target of (Target of Chosen))`.
+- **It**, inside an Alternate, is what the *other* spell acted on in its last
+  turn; each of the two spells has its own It. Outside an Alternate it means
+  nothing.
 
-A Move chasing a held selector's pick doesn't end when it arrives or is
-blocked; it keeps chasing, sliding around obstacles, until its mana runs out.
+Acting on several targets (All, Products of) drains the spell's mana once per
+target per tick.
 
-### Inventory, Chosen and Target of
+### Hold, inventory and Chosen
 
-Every spell attached to you (one you cast that follows you and hasn't been
-taken with Held) is in your **inventory**, listed top right.
+Casting a noun on its own (**Hold**, e.g. `Hold (Closest Player)`) doesn't do
+anything by itself: it stays attached to you and keeps re-reading its noun
+while its mana lasts. Every spell attached to you is in your **inventory**,
+listed top right, and **Chosen** lets another spell use one:
+`Destroy Chosen` dispels it, and `Move (Closest Stone) to (Target of Chosen)`
+follows what a held selector picks now. Several spells can use the same held
+noun. A Move whose destination is another spell's target keeps chasing: it
+doesn't end when it arrives or is blocked, and slides around obstacles.
 
-- **Chosen** is one of those spells, as a noun: `Destroy Chosen` dispels
-  exactly the spell you pick. When you cast a spell with Chosen in it, a
-  window opens for **each** Chosen, in reading order (including those in a
-  spell it creates), and you pick an attached spell for it, or Nothing. The
-  game pauses meanwhile; Esc cancels the cast. A spell can use several
-  Chosen, each meaning a different spell.
-- **Target of** *noun* is what that spell acts on *right now*, re-checked
-  every tick: a selector's pick, the object a Move or Destroy acts on, or a
-  Create's product (the newest object in its line, or the spell it created).
-  It nests, and unlike Held it only looks: the spell stays in your inventory.
-  `Move (Closest Stone) to (Target of Chosen)` with a held `Closest Player`
-  chosen is a live tracker that leaves the selector free for other spells.
-  Target of something that isn't a spell is nothing, so the spell waits.
+### Mark
+
+**Mark** *noun* marks what the noun means, for you: the adjective **Marked**
+then picks it, as in `Destroy (All Marked Thing)`. It's done once it has
+marked something, unless it follows a spell's target, in which case it marks
+each new one.
+
+### Alternate
+
+**Alternate** [*spell*] [*spell*] runs its two spells attached to itself, one
+at a time: each turn is a fresh cast, and it switches when the running spell
+is done, or after 3 s if it isn't. It pays for both and isn't done on its own;
+it ends when its mana runs out, and its spells end with it. With It, the two
+can pass a target back and forth: the Juggle pulls the closest stone to you,
+throws it at the closest player, then pulls a stone again.
 
 ### Spells wait for a target
 
 A spell with nothing to act on doesn't end: it waits, still draining mana,
 and looks again every tick for anything its nouns can mean. `Destroy
-(Closest Fire)` cast with no fire around destroys the next fire that appears;
-`Move ... to Held` with no held selector takes the next one you cast. A spell
-still ends when it reaches its goal (what a Destroy locked onto is gone), when
-a spell it follows is destroyed (it's cut off), or when its mana runs out. A
-Move whose object or destination is destroyed looks for another, and a
-Destroy following a selector goes on to the selector's next pick.
+(Closest Fire)` cast with no fire around destroys the next fire that appears.
+A spell still ends when it reaches its goal (what a Destroy locked onto is
+gone), when a spell it follows is destroyed (it's cut off), or when its mana
+runs out. A Move whose object or destination is destroyed looks for another,
+and a Destroy following a selector goes on to the selector's next pick.
 
 ### Spells that create spells
 
@@ -120,8 +149,8 @@ can itself be a Create Spell.
   never from the caster's storage. It keeps what it must carry for its own
   created spells as its reserve and burns the rest.
 - **A created spell sits where it was made** and doesn't follow the caster.
-  Me still means the caster, It means the first spell created, and Target of
-  the creator means the newest.
+  Me still means the caster, Target of the creator means the newest spell
+  it made, and Products of means all of them.
 - Each spell drains only its own words. A spell that ends returns fuel and
   any unspent reserve to the world.
 - There is no word limit; cost (drain plus reserve) is what keeps spells in check.
@@ -179,6 +208,6 @@ constants at the top of each script.
 - **Every block drains 0.2 mana per second** of its color, so a typical spell runs for 25–50 s. Colors follow the design doc's first sketch, and Wood, Me, It and Mana have colors assigned here.
 - **Mana can be selected and moved but not created.** Create Mana would produce mana for less than it yields.
 - **Mana crystals regrow:** one random crystal appears every 3 s, up to 12 in the world.
-- **A selector picks one object**, the closest. A held selector feeds exactly one spell, the first that takes it with Held. "It" still refers to your last selector too, without taking it.
+- **Picks are stored in the spell.** What you click for This and There, and pick for Chosen, is written into the cast spell, so the server can check it: Chosen must be one of your attached spells, This an existing object, There inside the arena.
 - **Spells are edited while the game is paused.** The editor is dropdowns that only offer blocks that fit the grammar. It stands in for a drag-and-drop block editor.
 - **Objects are circles.** There are no boxes or height layers yet.

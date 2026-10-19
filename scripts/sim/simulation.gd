@@ -68,26 +68,95 @@ func step(commands: Dictionary = {}) -> void:
 	_spawn_mana()
 
 
-## Spells attached to `caster`: ones they cast that follow them and haven't
-## been taken into another spell. Oldest first.
+## Spells attached to `caster`: ones they cast that follow them (not those an
+## Alternate runs). Oldest first.
 func inventory(caster: WorldObject) -> Array[WorldObject]:
 	var out: Array[WorldObject] = []
 	for o in objects:
 		if not o.dead and o.spell != null and o.spell.anchored and o.spell.caster == caster \
-				and o.spell.taken_by == null:
+				and o.spell.parent == null:
 			out.append(o)
 	return out
 
 
-## The selector `caster` is holding (their newest one no spell has taken
-## yet), or null.
-func held_selector(caster: WorldObject) -> WorldObject:
-	for i in range(objects.size() - 1, -1, -1):
-		var o := objects[i]
-		if not o.dead and o.spell != null and o.spell.is_selector() and o.spell.anchored \
-				and o.spell.caster == caster and o.spell.taken_by == null:
+## The live object with this id, or null.
+func find(id: int) -> WorldObject:
+	for o in objects:
+		if o.id == id and not o.dead:
 			return o
 	return null
+
+
+## Runs a picker: every live object matching `qualifier` and `adjectives`
+## (judged for `caster`), within `within` pixels of `from` if that's above 0.
+## Closest and Farthest give one, Random one at random (staying with one
+## from `keep` that still fits), All every match.
+func pick(picker: String, qualifier: String, adjectives: Array, from: Vector2, within: float,
+		caster: WorldObject, exclude: Array, keep: Array) -> Array[WorldObject]:
+	var found: Array[WorldObject] = []
+	for o in objects:
+		if o.dead or o in exclude or not o.matches(qualifier):
+			continue
+		if within > 0.0 and from.distance_to(o.pos) > within + o.radius:
+			continue
+		if adjectives.all(func(a: String) -> bool: return has_adjective(o, a, caster)):
+			found.append(o)
+	if picker == "all" or found.is_empty():
+		return found
+	if picker == "random":
+		for k in keep:
+			if k in found:
+				return [k]
+		return [found[rng.randi_range(0, found.size() - 1)]]
+	var best := found[0]
+	for o in found:
+		var d := from.distance_squared_to(o.pos)
+		var best_d := from.distance_squared_to(best.pos)
+		if (d > best_d) if picker == "farthest" else (d < best_d):
+			best = o
+	return [best]
+
+
+## Whether `o` fits an adjective, from `caster`'s point of view.
+func has_adjective(o: WorldObject, adjective: String, caster: WorldObject) -> bool:
+	match adjective:
+		"moving":
+			return o.moved.length() > 0.5
+		"burning":
+			return o.statuses.has("burning")
+		"mine":
+			return owner_of(o) == caster
+		"theirs":
+			return owner_of(o) != null and owner_of(o) != caster
+		"marked":
+			return o.marks.has(caster.id)
+	return false
+
+
+## Whose an object is: a spell's caster, the caster of the spell that made
+## it, or a player themselves.
+func owner_of(o: WorldObject) -> WorldObject:
+	if o.spell != null:
+		return o.spell.caster
+	if o.maker != null and o.maker.spell != null:
+		return o.maker.spell.caster
+	if o.has_tag("player"):
+		return o
+	return null
+
+
+## The first Thing along the ray from `from` in direction `dir`, or null.
+func aimed(from: Vector2, dir: Vector2, exclude: Array) -> WorldObject:
+	var best: WorldObject = null
+	var best_t := INF
+	for o in objects:
+		if o.dead or o in exclude or not o.matches("thing"):
+			continue
+		var t := (o.pos - from).dot(dir)
+		if t > 0.0 and t < best_t and ((o.pos - from) - dir * t).length() <= o.radius:
+			best = o
+			best_t = t
+	return best
 
 
 ## Nearest live object matching `qualifier`, measured from `from`.
@@ -140,9 +209,13 @@ func cast(caster: WorldObject, ast: Dictionary, aim: Vector2) -> WorldObject:
 ## Puts a spell into the world. Its mana is already paid: by a caster's
 ## storage, or by the reserve of the spell that created it.
 func start_spell(ast: Dictionary, caster: WorldObject, pos: Vector2, fuel: Dictionary,
-		reserve: Dictionary, aim: Vector2, anchored: bool) -> WorldObject:
+		reserve: Dictionary, aim: Vector2, anchored: bool, maker: WorldObject = null,
+		parent: WorldObject = null, it: Array[WorldObject] = []) -> WorldObject:
 	var host := spawn(Materials.make_spell_host(pos))
+	host.maker = maker
 	host.spell = Spell.new(ast, caster, host, fuel, reserve, anchored)
+	host.spell.parent = parent
+	host.spell.it = it
 	host.spell.on_cast(self, aim)
 	return host
 
@@ -170,6 +243,7 @@ func _integrate() -> void:
 				_separate(a, b)
 	for o in objects:
 		o.pos = o.pos.clamp(ARENA.position + Vector2.ONE * o.radius, ARENA.end - Vector2.ONE * o.radius)
+		o.moved = o.pos - o.prev_pos
 
 
 ## Pushes two overlapping solid objects apart. Stone that is not itself moving
@@ -247,11 +321,12 @@ func _cleanup() -> void:
 			alive.append(o)
 		elif o.spell != null:
 			released.append_array(_release(o))
-	# A selector taken into a spell ends with that spell.
+	# Whatever is bound to something that ended ends with it.
 	for o in alive:
-		if o.spell != null and o.spell.taken_by != null and o.spell.taken_by.dead:
+		if o.bound_to != null and o.bound_to.dead:
 			o.dead = true
-			released.append_array(_release(o))
+			if o.spell != null:
+				released.append_array(_release(o))
 	alive = alive.filter(func(o: WorldObject) -> bool: return not o.dead)
 	objects = alive
 	for m in released:
