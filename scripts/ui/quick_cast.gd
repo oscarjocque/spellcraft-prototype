@@ -1,8 +1,9 @@
 class_name QuickCast
 extends PanelContainer
 ## The quick-cast bar: Enter opens it, type a spell, Enter casts it toward the
-## mouse (or click where to cast it). Ctrl+1–0 saves it to that slot instead,
-## Up/Down go through spells typed before, Esc closes.
+## mouse (or click where to cast it). Enter on an empty bar casts the last one
+## again. Ctrl+1–0 saves it to that slot instead, Up/Down go through spells
+## typed before, Esc closes.
 
 signal cast(ast: Dictionary)
 signal saved(slot: int, ast: Dictionary)
@@ -49,6 +50,8 @@ func set_status(text: String) -> void:
 func open() -> void:
 	input.set_text("")
 	_history_at = _history.size()
+	if not _history.is_empty():
+		input.field.placeholder_text = "Enter: %s again   ·   ↑ earlier spells" % _history.back()
 	show()
 	move_to_front()
 	_place()
@@ -100,6 +103,11 @@ func _on_key(event: InputEvent) -> void:
 	var key: int = event.keycode
 	if key == KEY_ESCAPE:
 		close()
+	elif (key == KEY_ENTER or key == KEY_KP_ENTER) and input.field.text.strip_edges() == "":
+		if not _history.is_empty():  # Enter on an empty bar: the last spell again
+			input.set_text(_history.back())
+			if input.result.has("ast"):
+				_cast_typed(input.result["ast"], false)
 	elif key == KEY_UP or key == KEY_DOWN:
 		if _history.is_empty():
 			return

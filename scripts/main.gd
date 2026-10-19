@@ -85,6 +85,9 @@ func _process(delta: float) -> void:
 	hud.visible_parts(not editor.visible)
 	var under := sim.object_at(view.get_global_mouse_position())
 	var tip := "" if editor.visible or under == null else _describe(under)
+	if _picking() in ["this", "there"]:  # where the eyes are: by the mouse
+		tip = "[color=#ffd34d][b]%s?[/b] click %s · Esc cancels[/color]\n%s" % [_picking().capitalize(),
+				"a place" if _picking() == "there" else "a thing", tip]
 	hud.tooltip(tip, view.get_global_mouse_position())
 
 
@@ -157,7 +160,7 @@ func _prompt() -> String:
 		return ""
 	var nouns: Array = _casting["nouns"]
 	return "%s\n[b][color=#ffd34d]Click %s for %s (%d of %d)[/color][/b] [color=#8a8f98]· Esc cancels[/color]" % [
-		SpellText.bbcode(_casting["ast"]), "an object" if what == "this" else "a place",
+		SpellText.bbcode(_casting["ast"]), "a thing" if what == "this" else "a place",
 		what.capitalize(), _casting["index"] + 1, nouns.size()]
 
 
@@ -249,9 +252,11 @@ func _unhandled_input(event: InputEvent) -> void:
 			_reset()
 
 
-## While picking This or There: a click picks, Esc cancels the cast.
+## While picking This or There: a click picks, Esc or a right click cancels
+## the cast.
 func _handle_world_pick(event: InputEvent) -> void:
-	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE:
+	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE \
+			or event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
 		_cancel_cast()
 	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		var at := view.get_global_mouse_position()

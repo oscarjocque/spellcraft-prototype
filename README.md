@@ -22,7 +22,7 @@ selector are enough to build spells that interact in ways nobody scripted.
 | Enter | Type a spell to cast (see below) |
 | Tab | Open or close the spellbook (pauses the simulation) |
 | Left click | While typing a spell, cast it there; while picking This or There, pick |
-| Esc | Cancel a cast that is waiting for picks, or close the typing bar |
+| Esc | Cancel a cast that is waiting for picks (a right click does too), or close the typing bar |
 | Space | Drop one of your attached spells (pick it in a window) |
 | F1 | Show every word, colored by mana, with typed examples |
 | R | Reset the sandbox |
@@ -46,7 +46,8 @@ While you type, up to five words that could come next are suggested (**Tab**
 takes the first) and the spell is shown as it's understood, colored by the
 mana each word costs, with its cost. **Ctrl+1–0** saves it to that slot
 instead, **Shift+Enter** casts and keeps the bar open for the next; **↑/↓**
-recall spells typed before. Instead of Enter you can **click** where to cast
+recall spells typed before, and Enter on the empty bar casts the last one
+again (so Enter, Enter repeats it). Instead of Enter you can **click** where to cast
 it: what you click is its This (or its There), so `de` and a click destroys
 that thing, and **Shift+click** keeps the spell ready to click onto more. Pointing at something shows the words that
 describe it (Stone · moving · mine).

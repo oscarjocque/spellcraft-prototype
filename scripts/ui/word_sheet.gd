@@ -16,7 +16,7 @@ const GROUPS := [
 	["Extras", ["within", "from", "at", "up_to"], "within 3 m (of …)  ·  to …  ·  Create … at …  ·  …, up to 2"],
 ]
 const EXAMPLES := [
-	"mo st me", "mo st", "de", "destroy all fires within 3 of here", "create fire at there",
+	"mo st", "de", "destroy all fires within 3 of here", "create fire at there",
 	"move this to there", "mark all moving stones, up to 2", "closest player",
 	"move stone to target of chosen", "create spell [destroy fire]", "alternate 5 6", "mvoe stoen to me",
 ]
@@ -26,7 +26,7 @@ var _text: RichTextLabel
 
 func _ready() -> void:
 	var style := StyleBoxFlat.new()
-	style.bg_color = Color(0.08, 0.09, 0.11, 0.97)
+	style.bg_color = Color(0.08, 0.09, 0.11)
 	style.border_color = Color("2c3038")
 	style.set_border_width_all(1)
 	style.set_content_margin_all(14)

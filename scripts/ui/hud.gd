@@ -89,7 +89,9 @@ static func _show_text(label: RichTextLabel, text: String) -> void:
 ## Shows `bbcode` by the mouse at `at`, or nothing if it's "".
 func tooltip(bbcode: String, at: Vector2) -> void:
 	_show_text(_tip, bbcode)
-	_tip.position = at + Vector2(16, 12)
+	# Beside the mouse, kept on screen.
+	var screen := _tip.get_viewport_rect().size
+	_tip.position = (at + Vector2(16, 12)).min(screen - Vector2(_tip.get_content_width(), _tip.get_content_height()) - Vector2(8, 8))
 
 
 ## Hides the first-run hint (once the player has cast something).

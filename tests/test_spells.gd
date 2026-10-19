@@ -3,10 +3,19 @@ extends SceneTree
 ##   godot --headless --path . --script res://tests/test_spells.gd
 
 var _failures := 0
+var _ran := false
 
 
-func _init() -> void:
-	# Every test_ function, in the order they're written.
+func _process(_delta: float) -> bool:
+	# On the first frame, once the tree is up, so UI nodes get their _ready.
+	if not _ran:
+		_ran = true
+		_run()
+	return false
+
+
+## Every test_ function, in the order they're written.
+func _run() -> void:
 	var tests: Array[String] = []
 	for m in get_script().get_script_method_list():
 		if m["name"].begins_with("test_") and not m["name"] in tests:
@@ -1209,3 +1218,23 @@ func _replay() -> String:
 	for o in sim.objects:
 		state += "%d %s %s %.3f|" % [o.id, o.material, o.pos, o.health]
 	return state
+
+
+func test_quick_cast_keys() -> void:
+	var quick := QuickCast.new()
+	root.add_child(quick)
+	var cast := []
+	quick.cast.connect(func(ast: Dictionary) -> void: cast.append(ast))
+	quick.open()
+	quick.input.set_text("de")
+	quick.submit()
+	check(cast == [{"verb": "destroy", "what": {"ref": "this"}}] and not quick.visible,
+		"A click casts what's typed and closes the bar")
+	quick.open()
+	check(quick.input.field.placeholder_text.contains("de"), "The empty bar offers the last spell")
+	var enter := InputEventKey.new()
+	enter.keycode = KEY_ENTER
+	enter.pressed = true
+	quick._on_key(enter)
+	check(cast.size() == 2 and cast[1] == cast[0], "Enter on the empty bar casts the last spell again")
+	quick.free()
