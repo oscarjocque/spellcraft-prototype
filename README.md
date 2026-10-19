@@ -55,6 +55,10 @@ it: what you click is its This (or its There), so `de` and a click destroys
 that thing, and **Shift+click** keeps the spell ready to click onto more. Pointing at something shows the words that
 describe it (Stone · moving · mine).
 
+**Or pick them from your slots.** Number keys cast them toward the mouse.
+Pointing at a slot's line in the list rings what it would act on now, and
+clicking it opens it in the spellbook.
+
 **Or click them.** **Tab** opens the spellbook: your ten slots on the left,
 the chosen one on the right, where you can type it the same way or click its
 words. Each word opens a menu of at most five choices (longer lists are split

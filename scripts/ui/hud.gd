@@ -32,8 +32,10 @@ func _ready() -> void:
 	_tip.size.x = 360
 
 
-## `prompt` asks the player to pick something for the spell being cast.
-func refresh(sim: Simulation, player: WorldObject, slots: Array, selected: int, prompt: String) -> void:
+## `prompt` asks the player to pick something for the spell being cast;
+## `hovered` is the slot whose line the mouse is on, or -1.
+func refresh(sim: Simulation, player: WorldObject, slots: Array, selected: int, prompt: String,
+		hovered := -1) -> void:
 	_show_text(_prompt, prompt)
 	var mana := "[b]Mana[/b]  "
 	if player.has_tag("infinite_mana"):
@@ -53,7 +55,11 @@ func refresh(sim: Simulation, player: WorldObject, slots: Array, selected: int, 
 	for i in slots.size():
 		var key := "[b]%d[/b]" % ((i + 1) % 10)
 		var mark := "[color=#ffd34d]▶[/color] " if i == selected else "   "
-		text += "%s%s  %s\n" % [mark, key, SpellText.bbcode(slots[i])]
+		var line := "%s%s  %s" % [mark, key, SpellText.bbcode(slots[i])]
+		if i == hovered:
+			line = "[bgcolor=#2a2e36]%s   [color=#8a8f98]press %d to cast · click to edit[/color][/bgcolor]" % [
+				line, (i + 1) % 10]
+		text += line + "\n"
 	for i in sim.messages.size():
 		if sim.tick - sim.message_ticks[i] < MESSAGE_SECONDS * Simulation.TICK_RATE:
 			text += "[color=#ff8a8a]%s[/color]\n" % sim.messages[i]
@@ -73,6 +79,17 @@ func refresh(sim: Simulation, player: WorldObject, slots: Array, selected: int, 
 	for i in attached.size():
 		inv += "%d  %s\n" % [i + 1, SpellText.bbcode(attached[i].spell.ast)]
 	_show_text(_inventory, inv)
+
+
+## The slot whose line in the list is at `at`, or -1.
+func slot_at(at: Vector2, slot_count: int) -> int:
+	if not _bottom.visible or not _bottom.get_global_rect().has_point(at):
+		return -1
+	var y := at.y - _bottom.global_position.y
+	for i in mini(slot_count, _bottom.get_line_count() - 1):
+		if y >= _bottom.get_line_offset(i) and y < _bottom.get_line_offset(i + 1):
+			return i
+	return -1
 
 
 ## Shows `text` under the slots for a few seconds.

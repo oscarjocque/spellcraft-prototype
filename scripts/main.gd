@@ -71,22 +71,30 @@ func _process(delta: float) -> void:
 			_accum -= Simulation.DT
 			sim.step({player.controller: _command()})
 	view.alpha = _accum / Simulation.DT
-	hud.refresh(sim, player, slots, selected, _prompt())
 	view.preview = {}
-	if quick.visible and quick.input.result.has("ast"):
+	var mouse := view.get_global_mouse_position()
+	var hovered := hud.slot_at(get_viewport().get_mouse_position(), slots.size()) \
+			if not (quick.visible or editor.visible or flow.busy()) else -1
+	hud.refresh(sim, player, slots, selected, _prompt(), hovered)
+	if hovered >= 0:
+		var ast := SpellGrammar.embed_slots(slots[hovered], slots, [hovered])
+		view.preview = SpellPreview.targets(sim, player, ast, mouse, false)
+		view.preview_verb = ast["verb"]
+	elif quick.visible and quick.input.result.has("ast"):
 		var ast: Dictionary = quick.input.result["ast"]
-		view.preview = SpellPreview.targets(sim, player, ast, view.get_global_mouse_position())
+		view.preview = SpellPreview.targets(sim, player, ast, mouse)
 		view.preview_verb = ast["verb"]
 		quick.set_status(SpellPreview.describe(ast, view.preview))
 	elif quick.visible:
 		quick.set_status("")
 	hud.visible_parts(not editor.visible)
-	var mouse := view.get_global_mouse_position()
 	var under := sim.object_at(mouse)
 	var spell := view.spell_at(mouse) if under == null else null
 	var tip := ""
 	if editor.visible:
 		pass
+	elif hovered >= 0:
+		pass  # the line itself says what to do
 	elif under != null:
 		tip = _describe(under)
 	elif spell != null:
@@ -222,8 +230,14 @@ func _unhandled_input(event: InputEvent) -> void:
 	if flow.picking() in ["this", "there"]:
 		_handle_world_pick(event)
 		return
-	if quick.visible and event is InputEventMouseButton and event.pressed \
-			and event.button_index == MOUSE_BUTTON_LEFT:
+	var clicked: bool = event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT
+	var slot_clicked := hud.slot_at(get_viewport().get_mouse_position(), slots.size()) if clicked else -1
+	if slot_clicked >= 0 and not quick.visible and not flow.busy():
+		selected = slot_clicked
+		editor.open(slots, slot_clicked)  # a click on a slot's line edits it
+		get_viewport().set_input_as_handled()
+		return
+	if quick.visible and clicked:
 		quick.submit()  # cast what's typed where clicked: This is what's there
 		get_viewport().set_input_as_handled()
 		return
