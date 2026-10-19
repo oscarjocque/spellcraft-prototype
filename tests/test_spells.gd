@@ -851,6 +851,58 @@ func test_alternate_turns_are_capped() -> void:
 	check(alt.spell._sub.spell.ast == ast["second"], "A spell that never finishes still hands over after its turn")
 
 
+func test_up_to() -> void:
+	var w := spell_world()
+	var sim: Simulation = w[0]
+	var p: WorldObject = w[1]
+	var ast := {"verb": "destroy", "what": {"all": "fire"}, "adverbs": {"up_to": 2}}
+	check(SpellGrammar.to_text(ast) == "Destroy (All Fire), up to 2.", "Up to reads as words")
+	check(SpellGrammar.blocks(ast).size() == 4, "Up to is a word")
+	for x in [300, 500, 700, 900]:
+		sim.spawn(Materials.make("fire", Vector2(x, 200)))
+	var host := sim.cast(p, ast, Vector2.ZERO)
+	check(host.spell.targets().size() == 2, "Up to 2 acts on the 2 nearest at a time")
+	run(sim, 10)
+	check(count(sim, "fire") == 2 and host.dead, "...and ends once it has destroyed 2")
+
+	var wood := sim.cast(p, {"verb": "create", "what": {"material": "wood"}, "adverbs": {"up_to": 3}}, Vector2(600, 600))
+	run(sim, 10 * Simulation.TICK_RATE)
+	check(wood.spell.created.size() == 3 and not wood.dead, "Create up to 3 makes 3, then only sustains them")
+
+	var warden := {"verb": "create", "what": {"spell": {"verb": "select", "what": {"closest": "player"}}}, "adverbs": {"up_to": 5}}
+	check(SpellGrammar.spells_created(warden) == 5, "Create Spell up to 5 makes 5 spells")
+	check(same(SpellGrammar.payload(warden), {"violet": 5 * 0.4 * 60.0}), "...and carries mana for 5")
+
+	sim.spawn(Materials.make("stone", Vector2(400, 300)))
+	sim.spawn(Materials.make("stone", Vector2(400, 420)))
+	var pull := sim.cast(p, {"verb": "move", "what": {"all": "stone"}, "to": {"ref": "me"}, "adverbs": {"up_to": 1}}, Vector2.ZERO)
+	check(pull.spell.targets().size() == 1, "Move up to 1 moves one")
+
+	var marks := sim.cast(p, {"verb": "mark", "what": {"all": "wood"}, "adverbs": {"up_to": 2}}, Vector2.ZERO)
+	run(sim, 1)
+	check(sim.objects.filter(func(o: WorldObject) -> bool: return o.marks.has(p.id)).size() == 2 and marks.dead,
+		"Mark up to 2 marks two")
+
+	var turns := sim.cast(p, Sandbox.JUGGLE.merged({"adverbs": {"up_to": 2}}), Vector2.ZERO)
+	run(sim, 2 * Spell.ALTERNATE_TICKS + 2)
+	check(turns.dead, "Alternate up to 2 runs two turns, then ends")
+	check(SpellGrammar.validate({"verb": "mark", "what": {"ref": "me"}, "adverbs": {"up_to": 7}}) != "", "Up to takes a listed number")
+
+
+func test_here() -> void:
+	var w := spell_world()
+	var sim: Simulation = w[0]
+	var p: WorldObject = w[1]
+	var stone := sim.spawn(Materials.make("stone", Vector2(600, 360)))
+	var pull := sim.cast(p, {"verb": "move", "what": {"closest": "stone"}, "to": {"ref": "here"}}, Vector2.ZERO)
+	check(pull.spell.destination() == pull, "Here is the spell's own location")
+	run(sim, 3)
+	check(heading(stone).dot(stone.pos.direction_to(p.pos)) > 0.95, "...which, for a spell you cast, is where you are")
+	var maker := sim.cast(p, {"verb": "create", "what": {"spell": {"verb": "create", "what": {"material": "fire"}, "at": {"ref": "here"}}}}, Vector2(400, 600))
+	var made: WorldObject = maker.spell.what
+	check(made.spell.what.pos.distance_to(made.pos) < 1.0, "A created spell's Here is where it sits")
+
+
 func test_deterministic() -> void:
 	check(_replay() == _replay(), "Same inputs give the same world")
 

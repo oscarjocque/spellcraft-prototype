@@ -6,7 +6,7 @@ extends RefCounted
 ## Create has no goal: it builds one object after another, sustaining each
 ## finished one (fire doesn't burn out), until its mana runs out. Create Spell
 ## likewise makes spells, one every CREATE_SPELL_TICKS, until it has made
-## CREATED_SPELLS of them. Each new one goes in the free spot closest to where
+## them (CREATED_SPELLS, or its "up to"). Each new one goes in the free spot closest to where
 ## Create aims (see _create_spot), so they gather there and gaps get refilled;
 ## with no free spot within reach, Create waits.
 ##
@@ -52,6 +52,8 @@ var _from_bindings: Array = []  # [noun, binding] pairs for pickers' "to"/"of" n
 var _done := {}  # Move: objects that arrived or were blocked
 
 var _drain := {}  # color -> mana per tick
+var _limit := 0  # its "up to", 0 for none
+var _count := 0  # how many it has destroyed, marked, or turns it has run
 var _dir := Vector2.RIGHT  # the direction it was cast in
 var _build := 0.0
 var _building: WorldObject  # the object Create is growing, or null while it waits
@@ -76,6 +78,7 @@ func _init(p_ast: Dictionary, p_caster: WorldObject, p_host: WorldObject, p_mana
 	mana = p_mana
 	reserve = p_reserve
 	anchored = p_anchored
+	_limit = SpellGrammar.up_to(ast)
 	var per_second := SpellGrammar.drain_per_second(ast)
 	for c in per_second:
 		_drain[c] = per_second[c] / Simulation.TICK_RATE
@@ -139,8 +142,12 @@ func tick(sim: Simulation) -> bool:
 			if not _pay(subjects.size() - 1):
 				return false
 			for s in subjects:
+				var was_alive: bool = s.health > 0.0
 				s.health -= DESTROY_RATE * Simulation.DT
-			return true  # once what it locked onto is gone, _subjects ends it
+				if was_alive and s.health <= 0.0:
+					_count += 1
+			# Once what it locked onto is gone, _subjects ends it.
+			return _limit == 0 or _count < _limit
 		"mark":
 			var subjects: Variant = _subjects(sim)
 			if subjects == null:
@@ -148,7 +155,11 @@ func tick(sim: Simulation) -> bool:
 			if not _pay(subjects.size() - 1):
 				return false
 			for s in subjects:
-				s.marks[caster.id] = true
+				if not s.marks.has(caster.id):
+					s.marks[caster.id] = true
+					_count += 1
+			if _limit > 0 and _count >= _limit:
+				return false
 			# Done once it has marked something, unless it follows a spell's
 			# target, in which case it marks each new one.
 			return subjects.is_empty() or not _what["chain"].is_empty()
@@ -158,8 +169,7 @@ func tick(sim: Simulation) -> bool:
 			current = _hold(sim)
 			return true
 		"alternate":
-			_tick_alternate(sim)
-			return true
+			return _tick_alternate(sim)
 	return false
 
 
@@ -184,7 +194,17 @@ func _subjects(sim: Simulation) -> Variant:
 			return null
 		"unbound":
 			_what = _bind(ast["what"], sim)
-	return _eval(_what)
+	return _capped(_eval(_what))
+
+
+## With "up to N", only the N nearest of `objs`.
+func _capped(objs: Array[WorldObject]) -> Array[WorldObject]:
+	if _limit == 0 or objs.size() <= _limit:
+		return objs
+	var sorted := objs.duplicate()
+	sorted.sort_custom(func(a: WorldObject, b: WorldObject) -> bool:
+		return host.pos.distance_squared_to(a.pos) < host.pos.distance_squared_to(b.pos))
+	return sorted.slice(0, _limit)
 
 
 func _tick_move(sim: Simulation) -> bool:
@@ -199,7 +219,7 @@ func _tick_move(sim: Simulation) -> bool:
 	if _state(_to) != "ok":
 		_to = _bind(ast["to"], sim)
 		_done.clear()
-	var subjects := _eval(_what)
+	var subjects := _capped(_eval(_what))
 	var dests := _eval(_to)
 	if subjects.is_empty() or dests.is_empty():
 		return true  # nothing to move, or nowhere to move it, yet: wait
@@ -223,15 +243,16 @@ func _tick_move(sim: Simulation) -> bool:
 func _tick_create(sim: Simulation) -> bool:
 	if not _inner.is_empty():
 		# A created spell starts whole; make the next after a pause.
-		if created.size() >= SpellGrammar.CREATED_SPELLS:
+		if created.size() >= SpellGrammar.spells_created(ast):
 			return false
 		_spell_timer += 1
 		if _spell_timer >= CREATE_SPELL_TICKS:
 			_create_spell(sim)
 		return true
-	if _building == null or _building.dead or _build >= 1.0:
+	var room := _limit == 0 or created.size() < _limit
+	if room and (_building == null or _building.dead or _build >= 1.0):
 		_start_object(sim)
-	if _building != null:
+	if _building != null and not _building.dead:
 		_build = minf(1.0, _build + _build_step)
 		_building.radius = maxf(2.0, _full_radius * _build)
 	if _lifetime > 0:
@@ -240,16 +261,20 @@ func _tick_create(sim: Simulation) -> bool:
 	return true
 
 
-func _tick_alternate(sim: Simulation) -> void:
+func _tick_alternate(sim: Simulation) -> bool:
 	_turn_ticks += 1
 	if _sub != null and not _sub.dead:
 		_last[_turn] = _sub.spell.targets()
 		if _turn_ticks < ALTERNATE_TICKS:
-			return
+			return true
 		_sub.dead = true
-	# The turn is over: the other spell goes, its It what this one acted on.
+	# The turn is over: the other spell goes, its It what this one acted on,
+	# unless that was the last of its "up to" turns.
+	if _limit > 0 and _count >= _limit:
+		return false
 	_turn = 1 - _turn
 	_start_turn(sim)
+	return true
 
 
 ## Casts the spell whose turn it is, attached to this one, which pays for it.
@@ -266,6 +291,7 @@ func _start_turn(sim: Simulation) -> void:
 			host, host, it_now)
 	_sub.bound_to = host  # it ends with this spell
 	_turn_ticks = 0
+	_count += 1
 
 
 ## What the spell acts on right now: a held noun's value, Create's newest
@@ -282,7 +308,7 @@ func targets() -> Array[WorldObject]:
 			if what != null and not what.dead:
 				out.append(what)
 			return out
-	return _eval(_what)
+	return _capped(_eval(_what))
 
 
 ## The first target, or null.
@@ -378,6 +404,8 @@ func _resolve_ref(noun: Dictionary, sim: Simulation) -> WorldObject:
 	match noun["ref"]:
 		"me":
 			return caster
+		"here":
+			return host  # the spell's own world object marks where it is
 		"chosen":
 			# Only a spell really in the caster's inventory counts.
 			for o in sim.inventory(caster):
@@ -431,10 +459,10 @@ func _from_binding(noun: Dictionary, sim: Simulation) -> Dictionary:
 func _hold(sim: Simulation) -> Array[WorldObject]:
 	var noun := SpellGrammar.held_noun(ast)
 	if SpellGrammar.picker_of(noun) != "":
-		return _pick(noun, sim, current)
+		return _capped(_pick(noun, sim, current))
 	if _state(_what) == "unbound":
 		_what = _bind(noun, sim)
-	return _eval(_what)
+	return _capped(_eval(_what))
 
 
 # --- Create ------------------------------------------------------------------

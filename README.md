@@ -39,7 +39,8 @@ diamonds to collect mana.
 | Pickers | Closest, Farthest, Random, All |
 | Adjectives | Moving, Burning, Mine, Theirs, Marked |
 | Picked when casting | Chosen *(an attached spell)*, This *(click an object)*, There *(click a place)* |
-| Other nouns | Me, Aimed, It *(inside an Alternate)* |
+| Other nouns | Me, Here *(the spell's location)*, Aimed, It *(inside an Alternate)* |
+| Adverbs | up to N *(1, 2, 3, 4, 5 or 10)* |
 | Relations | Target of, Caster of, Maker of, Products of |
 
 The preset slots (keys 1–9 and 0):
@@ -79,7 +80,9 @@ A noun says what a spell acts on. Spells read like sentences:
   picked separately, in reading order; the game keeps running while you pick,
   and Esc cancels the cast.
 - **Aimed** is the first object along the line from the spell toward where
-  you cast it. **Me** is you.
+  you cast it. **Me** is you. **Here** is the spell's own location: where you
+  are for a spell you cast, or where a created spell sits, so
+  `Create Wood at Here` or `(All Fire within 2 m of Here)`.
 - **Relations** are re-read every tick: **Target of** a spell is what it acts
   on now (a held noun's value, a Create's newest product, what a Move or
   Destroy acts on); **Caster of** is who cast it; **Maker of** an object is
@@ -91,6 +94,23 @@ A noun says what a spell acts on. Spells read like sentences:
 
 Acting on several targets (All, Products of) drains the spell's mana once per
 target per tick.
+
+### Adverbs
+
+Any spell, nested ones included, can take an adverb from the adverb picker
+at the end of its sentence. The first is **up to N**, which sets how much:
+
+| Verb | Up to N |
+| --- | --- |
+| Create | makes at most N objects, then only sustains them |
+| Create Spell | makes N spells instead of 3 (and carries mana for N) |
+| Destroy | acts on the N nearest at a time; ends once it has destroyed N |
+| Move | moves only the N nearest |
+| Mark | marks at most N, then ends |
+| Hold | holds at most N picks |
+| Alternate | runs N turns, then ends |
+
+It reads as `Destroy (All Fire), up to 2.` and, like any word, costs mana.
 
 ### Hold, inventory and Chosen
 

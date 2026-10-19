@@ -8,7 +8,7 @@ extends PanelContainer
 ## A placeholder for a drag-and-drop block editor.
 
 ## Noun kinds offered, in the noun picker's order.
-const NOUN_KINDS := ["me", "it", "chosen", "this", "there", "aimed",
+const NOUN_KINDS := ["me", "here", "it", "chosen", "this", "there", "aimed",
 		"closest", "farthest", "random", "all",
 		"target_of", "caster_of", "maker_of", "products_of"]
 
@@ -112,6 +112,25 @@ func _add_spell(row: Container, ast: Dictionary, refresh: Callable) -> void:
 				row.add_child(_text("["))
 				_add_spell(row, ast[key], refresh)
 				row.add_child(_text("]"))
+	_add_adverbs(row, ast, refresh)
+
+
+## The adverb picker: so far, an optional "up to N".
+func _add_adverbs(row: Container, ast: Dictionary, refresh: Callable) -> void:
+	var options := ["no limit"] + SpellGrammar.UP_TO.map(func(n: int) -> String: return "up to %d" % n)
+	var limit := _picker(options, SpellGrammar.UP_TO.find(SpellGrammar.up_to(ast)) + 1)
+	limit.item_selected.connect(func(idx: int) -> void:
+		var adverbs: Dictionary = ast.get("adverbs", {})
+		if idx == 0:
+			adverbs.erase("up_to")
+		else:
+			adverbs["up_to"] = SpellGrammar.UP_TO[idx - 1]
+		if adverbs.is_empty():
+			ast.erase("adverbs")
+		else:
+			ast["adverbs"] = adverbs
+		refresh.call())
+	row.add_child(limit)
 
 
 ## Create's object (a material, or Spell followed by that spell's

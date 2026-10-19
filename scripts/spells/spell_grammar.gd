@@ -11,12 +11,17 @@ extends RefCounted
 ##   {"verb": "select", "what": NOUN}   # Hold: a noun on its own, re-read every tick
 ##   {"verb": "alternate", "first": SPELL, "second": SPELL}
 ##
+## Any spell may also have adverbs: {"adverbs": {ADVERB: VALUE}}. So far:
+##   "up_to": N   at most N: created, spells created, destroyed, moved,
+##                marked, held, or turns of an Alternate
+##
 ## NOUN is one of:
-##   {"ref": REF}                 Me, It, Chosen, This, There, Aimed
+##   {"ref": REF}                 Me, Here, It, Chosen, This, There, Aimed
 ##   {PICKER: QUALIFIER, "adj": [ADJECTIVE...]?, "within": METERS?, "from": NOUN?}
 ##                                e.g. (Closest Moving Stone within 3 m of There)
 ##   {RELATION: NOUN}             (Target of X), (Caster of X), ...
 ##
+## Here is the spell's own location (the caster's, for a spell they cast).
 ## It is what the other spell of an Alternate acted on in its last turn (and
 ## nothing outside an Alternate). Chosen, This and There are picked by the caster for each use when casting,
 ## and the pick is stored in the noun: "id" for Chosen and This, "at" for There.
@@ -29,7 +34,7 @@ extends RefCounted
 const VERBS := ["create", "destroy", "move", "mark", "select", "alternate"]
 const MATERIALS := ["fire", "water", "wood", "stone"]
 const QUALIFIERS := ["thing", "fire", "water", "wood", "stone", "spell", "player", "mana"]
-const REFS := ["me", "it", "chosen", "this", "there", "aimed"]
+const REFS := ["me", "here", "it", "chosen", "this", "there", "aimed"]
 ## Refs the caster picks when casting.
 const PICKED_REFS := ["chosen", "this", "there"]
 const PICKERS := ["closest", "farthest", "random", "all"]
@@ -39,14 +44,16 @@ const DISTANCES := [1, 2, 3, 5]  # meters, for "within"
 const PIXELS_PER_METER := 40.0
 const COLORS := ["red", "blue", "green", "violet"]
 const CREATED_SPELL_SECONDS := 60.0  # how long a created spell's mana must last
-const CREATED_SPELLS := 3  # how many spells one Create Spell makes
+const CREATED_SPELLS := 3  # how many spells one Create Spell makes, unless "up to"
+const ADVERBS := ["up_to"]
+const UP_TO := [1, 2, 3, 4, 5, 10]
 
 ## First sketch from the design doc, to be tuned.
 const BLOCK_COLOR := {
 	"create": "red", "fire": "red", "burning": "red", "at": "red",
-	"water": "blue", "mana": "blue",
+	"water": "blue", "mana": "blue", "up_to": "blue",
 	"move": "green", "stone": "green", "wood": "green", "moving": "green",
-	"there": "green", "aimed": "green", "within": "green", "from": "green",
+	"there": "green", "here": "green", "aimed": "green", "within": "green", "from": "green",
 	"destroy": "violet", "mark": "violet", "alternate": "violet", "it": "violet", "spell": "violet", "player": "violet", "thing": "violet",
 	"closest": "violet", "farthest": "violet", "random": "violet", "all": "violet",
 	"me": "violet", "chosen": "violet", "this": "violet",
@@ -63,6 +70,16 @@ static func held_noun(ast: Dictionary) -> Dictionary:
 	if ast.get("what") is Dictionary:
 		return ast["what"]
 	return {"closest": ast.get("qualifier", "")}
+
+
+## A spell's "up to" limit, or 0 for none.
+static func up_to(ast: Dictionary) -> int:
+	return ast.get("adverbs", {}).get("up_to", 0)
+
+
+## How many spells a Create Spell makes.
+static func spells_created(ast: Dictionary) -> int:
+	return up_to(ast) if up_to(ast) > 0 else CREATED_SPELLS
 
 
 ## The picker word of a selector noun, or "" if the noun isn't a selector.
@@ -126,6 +143,8 @@ static func own_blocks(ast: Dictionary) -> Array[String]:
 			out.append("alternate")
 			out.append_array(own_blocks(ast["first"]))
 			out.append_array(own_blocks(ast["second"]))
+	for adverb in ast.get("adverbs", {}):
+		out.append(adverb)
 	return out
 
 
@@ -168,7 +187,7 @@ static func drain_per_second(ast: Dictionary) -> Dictionary:
 
 
 ## Mana a spell must carry in reserve for the spells it creates: one `share`
-## for each of the CREATED_SPELLS it makes.
+## for each spell it makes.
 static func payload(ast: Dictionary) -> Dictionary:
 	var need := {}
 	# An Alternate carries one turn's worth for each of its spells.
@@ -181,7 +200,7 @@ static func payload(ast: Dictionary) -> Dictionary:
 		return need
 	var one := share(inner)
 	for c in one:
-		need[c] = need.get(c, 0.0) + one[c] * CREATED_SPELLS
+		need[c] = need.get(c, 0.0) + one[c] * spells_created(ast)
 	return need
 
 
@@ -197,6 +216,11 @@ static func share(inner: Dictionary) -> Dictionary:
 
 ## Returns "" if the spell is grammatical, else why not.
 static func validate(ast: Dictionary) -> String:
+	var adverbs: Variant = ast.get("adverbs", {})
+	if not adverbs is Dictionary or not adverbs.keys().all(func(a: Variant) -> bool: return a in ADVERBS):
+		return "Unknown adverb."
+	if adverbs.has("up_to") and not adverbs["up_to"] in UP_TO:
+		return "Up to needs a number."
 	var verb: String = ast.get("verb", "")
 	match verb:
 		"create":
@@ -288,6 +312,13 @@ static func to_text(ast: Dictionary) -> String:
 
 
 static func _sentence(ast: Dictionary) -> String:
+	var text := _clause(ast)
+	if up_to(ast) > 0:
+		text += ", up to %d" % up_to(ast)
+	return text
+
+
+static func _clause(ast: Dictionary) -> String:
 	match ast.get("verb", ""):
 		"create":
 			var inner := created_spell(ast)
