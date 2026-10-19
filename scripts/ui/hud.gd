@@ -1,0 +1,47 @@
+class_name Hud
+extends CanvasLayer
+## Mana storage, spell slots, recent messages and controls.
+
+var _top: RichTextLabel
+var _bottom: RichTextLabel
+
+
+func _ready() -> void:
+	_top = _make_label(Vector2(12, 8))
+	_bottom = _make_label(Vector2(12, 520))
+
+
+func refresh(sim: Simulation, player: WorldObject, slots: Array, selected: int) -> void:
+	var mana := "[b]Mana[/b]  "
+	for c in SpellGrammar.COLORS:
+		var hex: String = WorldView.MANA_COLOR[c].to_html(false)
+		mana += "[color=#%s]%s %d/%d[/color]   " % [hex, c, player.mana_store.get(c, 0.0), Simulation.STORE_CAP]
+	var spells := 0
+	for o in sim.objects:
+		if o.spell != null:
+			spells += 1
+	mana += "\nActive spells: %d    Health: %d" % [spells, player.health]
+	_top.text = mana
+
+	var text := ""
+	for i in slots.size():
+		var line := "%d  %s" % [i + 1, SpellGrammar.to_text(slots[i])]
+		text += ("[b][color=#ffd34d]> %s[/color][/b]" % line if i == selected else "   " + line) + "\n"
+	for m in sim.messages:
+		text += "[color=#ff8a8a]%s[/color]\n" % m
+	text += "[color=#8a8f98]WASD move · 1-8 pick spell · left click cast at cursor · Tab edit spells · R reset[/color]"
+	_bottom.text = text
+
+
+func _make_label(pos: Vector2) -> RichTextLabel:
+	var label := RichTextLabel.new()
+	label.bbcode_enabled = true
+	label.fit_content = true
+	label.scroll_active = false
+	label.mouse_filter = Control.MOUSE_FILTER_IGNORE
+	label.position = pos
+	label.size = Vector2(900, 0)
+	label.add_theme_font_size_override("normal_font_size", 14)
+	label.add_theme_font_size_override("bold_font_size", 14)
+	add_child(label)
+	return label

@@ -1,0 +1,3 @@
+# Normalize line endings for Godot text resources.
+* text=auto eol=lf
+*.png binary
