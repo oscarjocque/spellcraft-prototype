@@ -439,9 +439,12 @@ func _hold(sim: Simulation) -> Array[WorldObject]:
 
 # --- Create ------------------------------------------------------------------
 
-## Where a Create line starts: at its "at" noun if it has one, else just
-## outside the spell's anchor. If what it's at is destroyed, the line stays
-## where that was; until the noun names anything, there's nowhere yet.
+## Where a Create line starts. Without "at": just outside the spell's anchor,
+## growing away from it in the cast direction. With "at": right in front of
+## what it's at (on the caster's side, touching it), or on it if that's a
+## place or a spell, growing back toward the caster. If what it's at is
+## destroyed, the line stays where it was; until the noun names anything,
+## there's nowhere yet.
 func _line_start(sim: Simulation, radius: float) -> Vector2:
 	if not ast.get("at") is Dictionary:
 		return host.pos + _dir * (_edge + radius)
@@ -449,8 +452,14 @@ func _line_start(sim: Simulation, radius: float) -> Vector2:
 		_at = _bind(ast["at"], sim)
 	var at := _eval(_at)
 	if not at.is_empty():
-		_at_pos = at[0].pos
+		var t := at[0]
+		_at_pos = t.pos - _dir * (t.radius + radius) if t.matches("thing") else t.pos
 	return _at_pos
+
+
+## The way a Create line grows: away from the caster, or toward them for "at".
+func _line_dir() -> Vector2:
+	return -_dir if ast.get("at") is Dictionary else _dir
 
 
 ## Starts building the next object of a Create line in its nearest free
@@ -473,28 +482,24 @@ func _start_object(sim: Simulation) -> void:
 	what = _building
 
 
-## The nearest place on the line from `start`, every `step` along the cast
-## direction, that is inside the arena and passes `free`; Vector2.INF if none.
+## The nearest place on the line from `start`, every `step` the way the line
+## grows, that is inside the arena and passes `free`; Vector2.INF if none. A
+## line growing toward the caster stops when it reaches them.
 func _free_place(start: Vector2, step: float, radius: float, free: Callable) -> Vector2:
 	var arena := Simulation.ARENA.grow(-radius)
+	var toward_caster := ast.get("at") is Dictionary
 	var pos := start
-	while arena.has_point(pos):
+	while arena.has_point(pos) and not (toward_caster and (pos - host.pos).dot(_dir) < 0.0):
 		if free.call(pos):
 			return pos
-		pos += _dir * step
+		pos += _line_dir() * step
 	return Vector2.INF
 
 
-## Whether a new object of this Create's material fits at `at`. Something
-## solid needs room among solid things; something that isn't (fire, water)
-## can lie on top of other things, so Create Fire at a wooden wall sets it
-## burning, but never on its own material.
+## No physical object (a Thing) overlaps a circle of `radius` at `at`.
 func _is_clear(sim: Simulation, at: Vector2, radius: float) -> bool:
-	var solid: bool = Materials.PROPS[_material]["solid"]
 	for o in sim.objects:
-		if o.dead or not o.matches("thing") or at.distance_to(o.pos) >= o.radius + radius:
-			continue
-		if o.material == _material or (solid and o.solid):
+		if not o.dead and o.matches("thing") and at.distance_to(o.pos) < o.radius + radius:
 			return false
 	return true
 

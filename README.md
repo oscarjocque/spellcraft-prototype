@@ -34,7 +34,7 @@ diamonds to collect mana.
 | Block family | In the prototype |
 | --- | --- |
 | Verbs | Create, Destroy, Move, Mark, Hold *(a noun on its own)*, Alternate [*spell*] [*spell*] |
-| Create's objects | Fire, Water, Wood, Stone, or Spell [*another spell*]; optionally *at (noun)* |
+| Create's objects | Fire, Water, Wood, Stone, or Spell [*another spell*]; optionally *at (noun)*: starting right in front of it and growing back toward you |
 | Qualifiers | Thing *(any physical object)*, Fire, Water, Wood, Stone, Spell, Player, Mana |
 | Pickers | Closest, Farthest, Random, All |
 | Adjectives | Moving, Burning, Mine, Theirs, Marked |
