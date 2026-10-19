@@ -966,6 +966,58 @@ func test_drop() -> void:
 	check(other_spell in sim.inventory(p), "Dropping something that isn't an attached spell does nothing")
 
 
+## Throws a stone at a fresh dummy `gap` px away; returns the damage done.
+func throw_damage(gap: float) -> float:
+	var w := spell_world()
+	var sim: Simulation = w[0]
+	var dummy := sim.spawn(Materials.make_player(Vector2(400 + gap, 300)))
+	sim.spawn(Materials.make("stone", Vector2(400, 300)))
+	sim.cast(w[1], {"verb": "move", "what": {"closest": "stone"}, "to": {"ref": "this", "id": dummy.id}}, Vector2.ZERO)
+	run(sim, 80)
+	return dummy.max_health - dummy.health
+
+
+func test_impact_damage_is_consistent() -> void:
+	var damage := []
+	for gap in [300, 302, 304, 306, 308, 310, 312]:
+		damage.append(throw_damage(gap))
+	check(damage.all(func(d: float) -> bool: return is_equal_approx(d, damage[0])) and damage[0] > 0.0,
+		"A thrown stone always hits for the same damage, wherever it starts (got %s)" % str(damage))
+
+
+func test_impact_once_per_hit() -> void:
+	var w := spell_world()
+	var sim: Simulation = w[0]
+	var p: WorldObject = w[1]
+	var dummy := sim.spawn(Materials.make_player(Vector2(700, 300)))
+	sim.spawn(Materials.make("stone", Vector2(400, 300)))
+	var sel := sim.cast(p, {"verb": "select", "what": {"closest": "player"}}, Vector2.ZERO)
+	sim.cast(p, with_chosen({"verb": "move", "what": {"closest": "stone"}, "to": {"target_of": {"ref": "chosen"}}}, [sel.id]), Vector2.ZERO)
+	run(sim, 3 * Simulation.TICK_RATE)
+	var after_hit := dummy.health
+	check(after_hit < dummy.max_health, "A chasing stone hits its target")
+	run(sim, 2 * Simulation.TICK_RATE)
+	check(dummy.health == after_hit, "...once: pressing against it doesn't keep hurting")
+	dummy.pos = Vector2(1000, 300)  # it gets away; the stone catches up and hits again
+	run(sim, 4 * Simulation.TICK_RATE)
+	check(dummy.health < after_hit, "Catching up after a gap is a new hit")
+
+
+func test_impact_hurts_both_and_spares_walkers() -> void:
+	var w := spell_world()
+	var sim: Simulation = w[0]
+	var p: WorldObject = w[1]
+	var thrown := sim.spawn(Materials.make("stone", Vector2(400, 300)))
+	var still := sim.spawn(Materials.make("stone", Vector2(700, 300)))
+	sim.cast(p, {"verb": "move", "what": {"ref": "this", "id": thrown.id}, "to": {"ref": "this", "id": still.id}}, Vector2.ZERO)
+	run(sim, 60)
+	check(thrown.health < thrown.max_health and still.health < still.max_health, "Stone hitting stone damages both")
+	var wall := sim.spawn(Materials.make("wood", Vector2(p.pos.x + 60, p.pos.y)))
+	for i in 20:
+		sim.step({0: {"move": Vector2.RIGHT}})
+	check(wall.health == wall.max_health and p.health == p.max_health, "Walking into a wall hurts nothing")
+
+
 func test_deterministic() -> void:
 	check(_replay() == _replay(), "Same inputs give the same world")
 

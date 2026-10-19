@@ -195,7 +195,11 @@ can itself be a Create Spell.
 
 Interaction rules: fire sets flammable things burning, and burning wood is
 destroyed. Water destroys fire and puts out burning things. Anything moving
-stops at stone. A fast, heavy solid object damages whatever it hits. Moves
+stops at stone. When two solid objects collide, each takes damage
+once, from the other's mass times the speed they closed at, if that's high
+enough: a thrown stone hurts a player (and a little itself), a player walking
+into a wall hurts nothing, and something pressed against you hits only when
+it first arrives. Moves
 add up: several Moves on one object combine their pushes (opposite ones
 cancel), and a Move on a player adds to their walking. A spell
 that touches mana absorbs it into its own fuel, so `Move (Closest Mana) to It`

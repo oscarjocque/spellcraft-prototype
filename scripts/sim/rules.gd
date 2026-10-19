@@ -8,8 +8,24 @@ extends RefCounted
 ## is part of collision resolution.
 
 const BURN_DAMAGE := 20.0  # health per second while burning
-const IMPACT_MOMENTUM := 15000.0  # mass * speed above which a solid hit hurts
-const IMPACT_DAMAGE := 0.001  # damage per unit of momentum, per tick of contact
+const IMPACT_MOMENTUM := 15000.0  # mass * closing speed above which a solid hit hurts
+const IMPACT_DAMAGE := 0.001  # damage per unit of that momentum, once per hit
+
+
+## When two solid objects come into contact: each takes damage from the
+## other's mass times the speed at which they closed on each other, if that
+## is high enough. A heavy stone thrown at a player hurts them (and a little
+## itself); a player walking into a wall doesn't. Things already touching, or
+## moving apart, don't hit.
+static func on_impact(a: WorldObject, b: WorldObject) -> void:
+	var normal := a.pos.direction_to(b.pos)
+	var closing := (a.velocity - b.velocity).dot(normal)
+	if closing <= 0.0:
+		return
+	if a.mass * closing >= IMPACT_MOMENTUM:
+		b.health -= a.mass * closing * IMPACT_DAMAGE
+	if b.mass * closing >= IMPACT_MOMENTUM:
+		a.health -= b.mass * closing * IMPACT_DAMAGE
 
 
 ## Applies every rule where `a` acts on `b`. Called once for each order.
@@ -23,12 +39,6 @@ static func on_contact(sim: Simulation, a: WorldObject, b: WorldObject) -> void:
 		if b.material == "fire":
 			b.dead = true
 		b.statuses.erase("burning")
-
-	# A fast, heavy solid object damages the solid object it hits.
-	if a.solid and b.solid:
-		var momentum := a.mass * a.velocity.length()
-		if momentum >= IMPACT_MOMENTUM:
-			b.health -= momentum * IMPACT_DAMAGE
 
 	# A spell absorbs any mana it touches into its own fuel.
 	if a.spell != null and b.has_tag("mana") and not b.dead:

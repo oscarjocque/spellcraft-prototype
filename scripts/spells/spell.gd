@@ -243,7 +243,8 @@ func _tick_move(sim: Simulation) -> bool:
 		var dest := _nearest(dests, s)
 		if dest == null or (_done.has(s) and not chasing):
 			continue
-		if s.blocked or s.pos.distance_to(dest.pos) - s.radius - dest.radius <= 2.0:
+		# Arrived means touching, so the last push always makes contact.
+		if s.blocked or s.pos.distance_to(dest.pos) - s.radius - dest.radius <= 0.5:
 			_done[s] = true
 			continue
 		# Pushes add up, so several Moves on one object combine.

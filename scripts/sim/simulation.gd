@@ -24,6 +24,7 @@ var objects: Array[WorldObject] = []
 var messages: Array[String] = []  # recent messages for the HUD
 var rng := RandomNumberGenerator.new()
 var _next_id := 1
+var _touching := {}  # solid pairs in contact last tick, as Vector2i(lower id, higher id)
 
 
 func _init(seed_value := 1) -> void:
@@ -282,6 +283,7 @@ func _separate(a: WorldObject, b: WorldObject) -> void:
 
 
 func _contacts() -> void:
+	var touching := {}
 	var n := objects.size()
 	for i in n:
 		var a := objects[i]
@@ -289,8 +291,15 @@ func _contacts() -> void:
 			var b := objects[j]
 			if a.dead or b.dead or not a.touches(b):
 				continue
+			if a.solid and b.solid:
+				# A hit is the moment two solid things come into contact.
+				var pair := Vector2i(mini(a.id, b.id), maxi(a.id, b.id))
+				touching[pair] = true
+				if not _touching.has(pair):
+					Rules.on_impact(a, b)
 			Rules.on_contact(self, a, b)
 			Rules.on_contact(self, b, a)
+	_touching = touching
 
 
 func _update_states() -> void:
