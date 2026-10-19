@@ -36,7 +36,7 @@ diamonds to collect mana.
 | Create's objects | Fire, Water, Wood, Stone, or Spell [*another spell*] |
 | Qualifiers | Fire, Water, Wood, Stone, Spell, Player, Mana |
 | Selectors | Closest (takes a qualifier), inside a spell or cast on its own |
-| References | Me, It |
+| References | Me, It, Held |
 
 The preset slots cover every spell the design doc lists for this prototype:
 
@@ -48,11 +48,27 @@ The preset slots cover every spell the design doc lists for this prototype:
 | 4 | Destroy (Closest Fire). | Extinguish |
 | 5 | Move (Closest Stone) to (Closest Player). | Boulder throw |
 | 6 | Destroy (Closest Spell). | Dispel |
-| 7 + 8 | Closest Player (independent), then Move (Closest Stone) to It. | Live tracker |
+| 7 + 8 | Closest Player, then Move (Closest Stone) to Held. | Live tracker |
 | 9 | Create Spell [Destroy (Closest Fire)]. | Fire warden |
 
-To try a live tracker, cast 7 near the training dummy (the yellow circle), then cast 8.
-The stone chases whichever player is closest to the selector.
+To try a live tracker, cast 7, then 8. The stone chases whichever other player
+is closest to you, switching targets as you move, until its mana runs out.
+
+### Held selectors
+
+Casting an incomplete spell, a bare selector like `Closest Player`, doesn't
+do anything by itself: you **hold** it. It stays attached to you, never picks
+you, and re-chooses every tick while its mana lasts.
+
+The noun **Held** puts the selector you're holding into the next spell you
+cast that uses it. That spell then follows whatever the selector picks *now*,
+where an inline `(Closest Player)` would choose once at cast and stay locked.
+The taken selector belongs to that spell: you no longer hold it, and it ends
+when the spell ends. If you hold nothing, Held points at nothing and the spell
+ends at once.
+
+A Move chasing a held selector's pick doesn't end when it arrives or is
+blocked; it keeps chasing, sliding around obstacles, until its mana runs out.
 
 ### Spells that create spells
 
@@ -125,6 +141,6 @@ constants at the top of each script.
 - **Every block drains 0.2 mana per second** of its color, so a typical spell runs for 25–50 s. Colors follow the design doc's first sketch, and Wood, Me, It and Mana have colors assigned here.
 - **Mana can be selected and moved but not created.** Create Mana would produce mana for less than it yields.
 - **Mana crystals regrow:** one random crystal appears every 3 s, up to 12 in the world.
-- **A selector picks one object**, the closest. An independent selector sits where it was cast (the cursor) and can feed any number of spells through "It".
+- **A selector picks one object**, the closest. A held selector feeds exactly one spell, the first that takes it with Held. "It" still refers to your last selector too, without taking it.
 - **Spells are edited while the game is paused.** The editor is dropdowns that only offer blocks that fit the grammar. It stands in for a drag-and-drop block editor.
 - **Objects are circles.** There are no boxes or height layers yet.

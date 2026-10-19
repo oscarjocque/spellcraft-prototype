@@ -9,7 +9,7 @@ func _init() -> void:
 	for t in [
 		"test_barrier", "test_extinguish_releases_mana", "test_boulder_throw",
 		"test_fire_burns_wood", "test_water_destroys_fire", "test_stone_blocks_movement",
-		"test_dispel", "test_live_tracker", "test_destroying_selector_cuts_off_spell",
+		"test_dispel", "test_held_selector_tracks", "test_tracking_gets_around_stone", "test_held_noun_needs_a_held_selector", "test_destroying_selector_cuts_off_spell",
 		"test_not_enough_mana", "test_closest_never_picks_caster", "test_deterministic",
 		"test_payload", "test_create_spell_pays_from_reserve", "test_nested_create_spell",
 		"test_create_spell_needs_its_payload", "test_created_spell_stays_put",
@@ -125,31 +125,84 @@ func test_dispel() -> void:
 	sim.spawn(Materials.make_player(Vector2(900, 360)))  # dummy, does not collect
 	sim.cast(w[1], {"verb": "select", "qualifier": "player"}, Vector2(900, 300))
 	run(sim, 2)
-	check(count(sim, "spell") == 1, "Independent selector stays active")
-	var mana_before := count(sim, "mana")
-	sim.cast(w[1], {"verb": "destroy", "what": {"closest": "spell"}}, Vector2.ZERO)
+	check(count(sim, "spell") == 1, "Held selector stays active")
+	var p: WorldObject = w[1]
+	sim.cast(p, {"verb": "destroy", "what": {"closest": "spell"}}, Vector2.ZERO)
+	var violet: float = p.mana_store["violet"]
 	run(sim, 4)
 	check(count(sim, "spell") == 0, "Dispel destroys the spell and then ends")
-	check(count(sim, "mana") > mana_before, "Dispelled spell releases its mana")
+	# The held selector sat on its caster, so its released mana lands on them.
+	check(p.mana_store["violet"] > violet, "Dispelled spell releases its mana")
 
 
-func test_live_tracker() -> void:
+func test_held_selector_tracks() -> void:
 	var w := world()
 	var sim: Simulation = w[0]
 	var p: WorldObject = w[1]
-	var stone := sim.spawn(Materials.make("stone", Vector2(300, 600)))
+	var stone := sim.spawn(Materials.make("stone", Vector2(500, 360)))
 	var a := sim.spawn(Materials.make_player(Vector2(900, 150)))
 	var b := sim.spawn(Materials.make_player(Vector2(900, 650)))
 	var selector := sim.cast(p, {"verb": "select", "qualifier": "player"}, Vector2(900, 100))
-	sim.cast(p, {"verb": "move", "what": {"closest": "stone"}, "to": {"ref": "it"}}, Vector2.ZERO)
+	check(selector.spell.anchored and selector.pos == p.pos, "A bare selector stays attached to its caster")
+	var mover := sim.cast(p, {"verb": "move", "what": {"closest": "stone"}, "to": {"ref": "held"}}, Vector2.ZERO)
+	check(selector.spell.taken_by == mover, "Held puts the held selector into the new spell")
 	run(sim, 10)
-	check(selector.spell.current == a, "Selector picks the player nearest to it")
-	var heading_a := stone.pos.direction_to(a.pos)
-	check((stone.pos - stone.prev_pos).normalized().dot(heading_a) > 0.95, "Stone chases the selector's pick")
-	selector.pos = Vector2(900, 700)  # the selector is moved; its pick changes
+	check(selector.spell.current == a, "Held selector picks the player nearest its caster, never the caster")
+	check(heading(stone).dot(stone.pos.direction_to(a.pos)) > 0.95, "Stone chases the held selector's pick")
+
+	p.pos = Vector2(200, 650)  # the caster walks; the held selector goes with them
 	run(sim, 2)
-	check(selector.spell.current == b, "Independent selector re-chooses every tick")
-	check((stone.pos - stone.prev_pos).normalized().dot(stone.pos.direction_to(b.pos)) > 0.95, "Stone follows the new pick")
+	check(selector.pos.distance_to(p.pos) < 1.0, "Held selector follows its caster")
+	check(selector.spell.current == b, "Held selector re-chooses every tick")
+	check(heading(stone).dot(stone.pos.direction_to(b.pos)) > 0.95, "Stone follows the new pick")
+
+	run(sim, 8 * Simulation.TICK_RATE)
+	check(not mover.dead, "Chasing a held selector's pick doesn't end on arrival")
+	b.pos = Vector2(650, 650)  # still nearer the caster than a is
+	run(sim, 3 * Simulation.TICK_RATE)
+	check(stone.pos.distance_to(b.pos) < stone.radius + b.radius + 4, "Stone keeps tracking its target")
+	mover.health = 0
+	run(sim, 2)
+	check(selector.dead, "The taken selector ends with the spell it was put into")
+
+
+func test_tracking_gets_around_stone() -> void:
+	var w := world()
+	var sim: Simulation = w[0]
+	var p: WorldObject = w[1]
+	var stone := sim.spawn(Materials.make("stone", Vector2(400, 360)))
+	sim.spawn(Materials.make("stone", Vector2(600, 362)))  # in the way
+	var target := sim.spawn(Materials.make_player(Vector2(900, 360)))
+	sim.cast(p, {"verb": "select", "qualifier": "player"}, Vector2.ZERO)
+	var mover := sim.cast(p, {"verb": "move", "what": {"closest": "stone"}, "to": {"ref": "held"}}, Vector2.ZERO)
+	run(sim, 6 * Simulation.TICK_RATE)
+	check(not mover.dead, "A chase doesn't end when stone blocks it")
+	check(stone.pos.distance_to(target.pos) < stone.radius + target.radius + 4, "It slides around the stone and reaches its target")
+
+
+func test_held_noun_needs_a_held_selector() -> void:
+	var w := world()
+	var sim: Simulation = w[0]
+	sim.spawn(Materials.make("stone", Vector2(500, 360)))
+	sim.spawn(Materials.make_player(Vector2(900, 360)))
+	var p: WorldObject = w[1]
+	p.tags["infinite_mana"] = true
+	var held := {"verb": "move", "what": {"closest": "stone"}, "to": {"ref": "held"}}
+	var mover := sim.cast(p, held, Vector2.ZERO)
+	run(sim, 1)
+	check(mover.dead, "With no held selector, Held has nothing to point at and the spell ends")
+	check(SpellGrammar.to_text(held) == "Move (Closest Stone) to Held.", "Held reads as a noun")
+
+	var selector := sim.cast(p, {"verb": "select", "qualifier": "player"}, Vector2.ZERO)
+	var first := sim.cast(p, held, Vector2.ZERO)
+	var second := sim.cast(p, held, Vector2.ZERO)
+	check(first.spell.destination() != null, "The first spell takes the held selector")
+	run(sim, 1)
+	check(second.dead and selector.spell.taken_by == first, "Once taken, it is no longer held")
+
+
+func heading(o: WorldObject) -> Vector2:
+	return (o.pos - o.prev_pos).normalized()
 
 
 func test_destroying_selector_cuts_off_spell() -> void:
@@ -260,8 +313,10 @@ func test_spell_absorbs_mana() -> void:
 	var w := world()
 	var sim: Simulation = w[0]
 	var p: WorldObject = w[1]
-	sim.spawn(Materials.make_player(Vector2(900, 360)))
-	var host := sim.cast(p, {"verb": "select", "qualifier": "player"}, Vector2(900, 300))
+	# A caster that doesn't collect mana, so only the spell can take it.
+	var caster := sim.spawn(Materials.make_player(Vector2(900, 300)))
+	caster.tags["infinite_mana"] = true
+	var host := sim.cast(caster, {"verb": "select", "qualifier": "player"}, Vector2.ZERO)
 	var crystal := sim.spawn(Materials.make_mana("blue", 5.0, Vector2(903, 300)))
 	var target := sim.spawn(Materials.make_mana("red", 5.0, Vector2(600, 600)))
 	run(sim, 1)

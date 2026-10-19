@@ -68,6 +68,17 @@ func step(commands: Dictionary = {}) -> void:
 	_spawn_mana()
 
 
+## The selector `caster` is holding (their newest one no spell has taken
+## yet), or null.
+func held_selector(caster: WorldObject) -> WorldObject:
+	for i in range(objects.size() - 1, -1, -1):
+		var o := objects[i]
+		if not o.dead and o.spell != null and o.spell.is_selector() and o.spell.anchored \
+				and o.spell.caster == caster and o.spell.taken_by == null:
+			return o
+	return null
+
+
 ## Nearest live object matching `qualifier`, measured from `from`.
 func closest(from: Vector2, qualifier: String, exclude: Array) -> WorldObject:
 	var best: WorldObject = null
@@ -110,9 +121,9 @@ func cast(caster: WorldObject, ast: Dictionary, aim: Vector2) -> WorldObject:
 			caster.mana_store[c] -= amount
 			fuel[c] = amount
 
-	# An independent selector is placed at the aim; other spells follow the caster.
-	var independent: bool = ast["verb"] == "select"
-	return start_spell(ast, caster, aim if independent else caster.pos, fuel, reserve, aim, not independent)
+	# Every spell a player casts is attached to them, including an incomplete
+	# one (a bare selector), which they then hold for later spells to use.
+	return start_spell(ast, caster, caster.pos, fuel, reserve, aim, true)
 
 
 ## Puts a spell into the world. Its mana is already paid: by a caster's
@@ -225,6 +236,12 @@ func _cleanup() -> void:
 			alive.append(o)
 		elif o.spell != null:
 			released.append_array(_release(o))
+	# A selector taken into a spell ends with that spell.
+	for o in alive:
+		if o.spell != null and o.spell.taken_by != null and o.spell.taken_by.dead:
+			o.dead = true
+			released.append_array(_release(o))
+	alive = alive.filter(func(o: WorldObject) -> bool: return not o.dead)
 	objects = alive
 	for m in released:
 		spawn(m)

@@ -1,15 +1,18 @@
 class_name SpellGrammar
 extends RefCounted
-## Spells as data. A spell is a sentence: a verb with its noun slots, or a
-## selector cast on its own as an independent spell.
+## Spells as data. A spell is a sentence: a verb with its noun slots, or an
+## incomplete one: a selector cast on its own, which the caster then holds.
 ##
 ##   {"verb": "create", "what": {"material": "wood"}}
 ##   {"verb": "create", "what": {"spell": SPELL}}     # creates another spell
 ##   {"verb": "destroy", "what": NOUN}
 ##   {"verb": "move", "what": NOUN, "to": NOUN}
-##   {"verb": "select", "qualifier": "player"}   # independent Closest selector
+##   {"verb": "select", "qualifier": "player"}   # a Closest selector on its own
 ##
-## NOUN is {"ref": "me"}, {"ref": "it"} or {"closest": QUALIFIER}.
+## NOUN is {"ref": "me"}, {"ref": "it"}, {"ref": "held"} or {"closest": QUALIFIER}.
+## Held is the selector the caster is holding; the spell takes it over. An
+## inline Closest chooses once, when the spell is cast; a held one keeps
+## choosing, and the spell follows whatever it picks now.
 ## Every block is one word and costs mana of one color. A created spell pays
 ## its own drain: the spell creating it must carry that mana as a reserve
 ## (see `payload`).
@@ -17,7 +20,7 @@ extends RefCounted
 const VERBS := ["create", "destroy", "move", "select"]
 const MATERIALS := ["fire", "water", "wood", "stone"]
 const QUALIFIERS := ["fire", "water", "wood", "stone", "spell", "player", "mana"]
-const REFS := ["me", "it"]
+const REFS := ["me", "it", "held"]
 const COLORS := ["red", "blue", "green", "violet"]
 const CREATED_SPELL_SECONDS := 60.0  # how long a created spell's mana must last
 
@@ -27,7 +30,7 @@ const BLOCK_COLOR := {
 	"water": "blue", "mana": "blue",
 	"move": "green", "stone": "green", "wood": "green",
 	"destroy": "violet", "closest": "violet", "spell": "violet", "player": "violet",
-	"me": "violet", "it": "violet",
+	"me": "violet", "it": "violet", "held": "violet",
 }
 
 ## Mana per second each block drains while its spell is active.
@@ -152,7 +155,7 @@ static func _sentence(ast: Dictionary) -> String:
 		"move":
 			return "Move %s to %s" % [_noun_text(ast["what"]), _noun_text(ast["to"])]
 		"select":
-			return "Closest %s (independent)" % ast["qualifier"].capitalize()
+			return "Closest %s" % ast["qualifier"].capitalize()
 	return "?"
 
 

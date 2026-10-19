@@ -6,8 +6,9 @@ extends RefCounted
 ## direction it was cast, sustaining each finished one (fire doesn't burn out),
 ## until its mana runs out.
 ##
-## Anchors: verb spells a player casts follow their caster. Independent
-## selectors, and spells created by other spells, stay at their own point.
+## Anchors: every spell a player casts follows them, including a bare selector,
+## which they hold until a later spell takes it in with the noun Held. Spells
+## created by other spells stay at their own point.
 ##
 ## Mana: `mana` is the spell's own fuel and drains every tick. `reserve` is
 ## earmarked for the spell it creates and is handed over when it does.
@@ -26,7 +27,8 @@ var anchored := true  # follows its caster
 var what: WorldObject  # locked at cast; for Create, the object being built
 var created: Array[WorldObject] = []  # every object this Create has made
 var to: WorldObject  # Move's destination, locked at cast
-var current: WorldObject  # an independent selector's pick this tick
+var current: WorldObject  # a selector spell's pick this tick
+var taken_by: WorldObject  # for a held selector: the spell that took it in
 var _what_follows := false  # `what` is a selector this spell follows
 var _to_follows := false
 
@@ -53,7 +55,8 @@ func _init(p_ast: Dictionary, p_caster: WorldObject, p_host: WorldObject, p_mana
 		_drain[c] = per_second[c] / Simulation.TICK_RATE
 
 
-func is_independent() -> bool:
+## A bare selector, cast on its own: it re-chooses every tick.
+func is_selector() -> bool:
 	return ast["verb"] == "select"
 
 
@@ -85,8 +88,8 @@ func on_cast(sim: Simulation, aim: Vector2) -> void:
 			_what_follows = _follows(ast["what"], what)
 			_to_follows = _follows(ast["to"], to)
 		"select":
-			current = sim.closest(host.pos, ast["qualifier"], [host])
-	caster.last_it = host if is_independent() else what
+			current = _closest(sim, ast["qualifier"])
+	caster.last_it = host if is_selector() else what
 
 
 ## Starts building the next object of a Create line, just past the last one.
@@ -144,21 +147,25 @@ func tick(sim: Simulation) -> bool:
 		"move":
 			var subject := target()
 			var dest := destination()
-			if subject == null or dest == null or subject.blocked:
+			if subject == null or dest == null:
 				return false
+			# A chase after a selector's pick keeps going when it arrives or is
+			# blocked (it slides around what blocks it); other moves are done.
+			if subject.blocked:
+				return _to_follows
 			if subject.pos.distance_to(dest.pos) - subject.radius - dest.radius <= 2.0:
-				return false
+				return _to_follows
 			subject.velocity = subject.pos.direction_to(dest.pos) * MOVE_SPEED
 			return true
 		"select":
-			current = sim.closest(host.pos, ast["qualifier"], [host])
+			current = _closest(sim, ast["qualifier"])
 			return true
 	return false
 
 
 ## What the spell acts on right now, or null if that is gone.
 func target() -> WorldObject:
-	return current if is_independent() else _live(what, _what_follows)
+	return current if is_selector() else _live(what, _what_follows)
 
 
 func destination() -> WorldObject:
@@ -175,15 +182,27 @@ static func _live(o: WorldObject, follows: bool) -> WorldObject:
 	return o
 
 
-## "It" naming an independent selector means: follow whatever it picks.
+## Held, or "It" naming a selector spell, means: follow whatever it picks now.
 static func _follows(noun: Dictionary, o: WorldObject) -> bool:
-	return noun.get("ref", "") == "it" and o != null and o.spell != null and o.spell.is_independent()
+	return noun.get("ref", "") in ["it", "held"] and o != null and o.spell != null and o.spell.is_selector()
 
 
 func _resolve(noun: Dictionary, sim: Simulation) -> WorldObject:
 	if noun.has("ref"):
-		return caster if noun["ref"] == "me" else caster.last_it
-	# Closest is measured from the spell's location and never picks the object
-	# the spell is anchored to, so a caster never selects themselves.
+		match noun["ref"]:
+			"me":
+				return caster
+			"held":
+				var held := sim.held_selector(caster)
+				if held != null:
+					held.spell.taken_by = host  # it now belongs to this spell
+				return held
+		return caster.last_it
+	return _closest(sim, noun["closest"])
+
+
+## Closest is measured from the spell's location and never picks the object
+## the spell is anchored to, so a caster never selects themselves.
+func _closest(sim: Simulation, qualifier: String) -> WorldObject:
 	var exclude := [host, caster] if anchored else [host]
-	return sim.closest(host.pos, noun["closest"], exclude)
+	return sim.closest(host.pos, qualifier, exclude)

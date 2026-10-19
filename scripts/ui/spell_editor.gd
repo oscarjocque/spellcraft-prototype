@@ -77,7 +77,7 @@ func _fill_slot(slot: VBoxContainer, i: int) -> void:
 ## The pickers for one sentence. Edits `ast` in place, so the same code edits a
 ## slot's spell and any spell nested inside it by Create Spell.
 func _add_spell(row: HBoxContainer, ast: Dictionary, refresh: Callable) -> void:
-	var verbs := ["Create", "Destroy", "Move", "Closest (independent)"]
+	var verbs := ["Create", "Destroy", "Move", "Closest (held)"]
 	var verb := _picker(verbs, SpellGrammar.VERBS.find(ast["verb"]))
 	verb.item_selected.connect(func(idx: int) -> void:
 		ast.clear()
@@ -117,14 +117,14 @@ func _add_creation(row: HBoxContainer, what: Dictionary, refresh: Callable) -> v
 		row.add_child(_text("]"))
 
 
-## A noun slot: Me, It, or Closest followed by a qualifier.
+## A noun slot: Me, It, Held, or Closest followed by a qualifier.
 func _add_noun(row: HBoxContainer, noun: Dictionary, refresh: Callable) -> void:
-	var kinds := ["Me", "It", "Closest"]
-	var current := 2 if noun.has("closest") else SpellGrammar.REFS.find(noun["ref"])
+	var kinds := ["Me", "It", "Held", "Closest"]
+	var current := 3 if noun.has("closest") else SpellGrammar.REFS.find(noun["ref"])
 	var kind := _picker(kinds, current)
 	kind.item_selected.connect(func(idx: int) -> void:
 		noun.clear()
-		if idx == 2:
+		if idx == 3:
 			noun["closest"] = "fire"
 		else:
 			noun["ref"] = SpellGrammar.REFS[idx]
