@@ -13,6 +13,7 @@ var slots: Array = Sandbox.PRESETS.duplicate(true)
 var selected := 0
 var _accum := 0.0
 var _pending_cast := {}
+var _chosen_id := 0  # the inventory spell picked with Q/E; 0 = always the newest
 
 
 func _ready() -> void:
@@ -29,6 +30,7 @@ func _reset() -> void:
 	view.sim = sim
 	_accum = 0.0
 	_pending_cast = {}
+	_chosen_id = 0
 
 
 func _process(delta: float) -> void:
@@ -38,7 +40,7 @@ func _process(delta: float) -> void:
 			_accum -= Simulation.DT
 			sim.step({player.controller: _command()})
 	view.alpha = _accum / Simulation.DT
-	hud.refresh(sim, player, slots, selected)
+	hud.refresh(sim, player, slots, selected, _chosen())
 
 
 func _command() -> Dictionary:
@@ -48,8 +50,30 @@ func _command() -> Dictionary:
 	}
 	if not _pending_cast.is_empty():
 		cmd["cast"] = _pending_cast
+		var chosen := _chosen()
+		cmd["chosen"] = chosen.id if chosen != null else 0
 		_pending_cast = {}
 	return cmd
+
+
+## The inventory spell the noun Chosen means: the one picked with Q/E, or the
+## newest if none is picked or the picked one has ended.
+func _chosen() -> WorldObject:
+	var inventory := sim.inventory(player)
+	for o in inventory:
+		if o.id == _chosen_id:
+			return o
+	_chosen_id = 0
+	return inventory.back() if not inventory.is_empty() else null
+
+
+## Picks the previous (-1) or next (+1) spell in the inventory, wrapping.
+func _cycle_chosen(step: int) -> void:
+	var inventory := sim.inventory(player)
+	if inventory.is_empty():
+		return
+	var i := inventory.find(_chosen())
+	_chosen_id = inventory[posmod(i + step, inventory.size())].id
 
 
 func _input(event: InputEvent) -> void:
@@ -68,6 +92,10 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		if event.keycode >= KEY_1 and event.keycode < KEY_1 + slots.size():
 			selected = event.keycode - KEY_1
+		elif event.keycode == KEY_Q:
+			_cycle_chosen(-1)
+		elif event.keycode == KEY_E:
+			_cycle_chosen(1)
 		elif event.keycode == KEY_R:
 			_reset()
 	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:

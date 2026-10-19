@@ -68,6 +68,17 @@ func step(commands: Dictionary = {}) -> void:
 	_spawn_mana()
 
 
+## Spells attached to `caster`: ones they cast that follow them and haven't
+## been taken into another spell. Oldest first.
+func inventory(caster: WorldObject) -> Array[WorldObject]:
+	var out: Array[WorldObject] = []
+	for o in objects:
+		if not o.dead and o.spell != null and o.spell.anchored and o.spell.caster == caster \
+				and o.spell.taken_by == null:
+			out.append(o)
+	return out
+
+
 ## The selector `caster` is holding (their newest one no spell has taken
 ## yet), or null.
 func held_selector(caster: WorldObject) -> WorldObject:
@@ -96,7 +107,10 @@ func closest(from: Vector2, qualifier: String, exclude: Array) -> WorldObject:
 ## Validates a spell as the server would, infuses mana, and casts it. A spell
 ## that creates another spell also takes, as a reserve, all the mana that
 ## spell will need.
-func cast(caster: WorldObject, ast: Dictionary, aim: Vector2) -> WorldObject:
+##
+## `chosen` is the id of the spell chosen in the caster's inventory, for the
+## noun Chosen; it only counts if that spell really is in their inventory.
+func cast(caster: WorldObject, ast: Dictionary, aim: Vector2, chosen := 0) -> WorldObject:
 	var err := SpellGrammar.validate(ast)
 	if err != "":
 		say(err)
@@ -123,15 +137,20 @@ func cast(caster: WorldObject, ast: Dictionary, aim: Vector2) -> WorldObject:
 
 	# Every spell a player casts is attached to them, including an incomplete
 	# one (a bare selector), which they then hold for later spells to use.
-	return start_spell(ast, caster, caster.pos, fuel, reserve, aim, true)
+	var chosen_spell: WorldObject = null
+	for o in inventory(caster):
+		if o.id == chosen:
+			chosen_spell = o
+	return start_spell(ast, caster, caster.pos, fuel, reserve, aim, true, chosen_spell)
 
 
 ## Puts a spell into the world. Its mana is already paid: by a caster's
 ## storage, or by the reserve of the spell that created it.
 func start_spell(ast: Dictionary, caster: WorldObject, pos: Vector2, fuel: Dictionary,
-		reserve: Dictionary, aim: Vector2, anchored: bool) -> WorldObject:
+		reserve: Dictionary, aim: Vector2, anchored: bool, chosen: WorldObject = null) -> WorldObject:
 	var host := spawn(Materials.make_spell_host(pos))
 	host.spell = Spell.new(ast, caster, host, fuel, reserve, anchored)
+	host.spell.chosen = chosen
 	host.spell.on_cast(self, aim)
 	return host
 
@@ -140,7 +159,7 @@ func _control(o: WorldObject, cmd: Dictionary) -> void:
 	var move: Vector2 = cmd.get("move", Vector2.ZERO)
 	o.velocity = move.limit_length(1.0) * PLAYER_SPEED
 	if cmd.has("cast"):
-		cast(o, cmd["cast"], cmd.get("aim", o.pos))
+		cast(o, cmd["cast"], cmd.get("aim", o.pos), cmd.get("chosen", 0))
 
 
 func _integrate() -> void:

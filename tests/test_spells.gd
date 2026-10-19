@@ -14,6 +14,8 @@ func _init() -> void:
 		"test_payload", "test_create_spell_pays_from_reserve", "test_nested_create_spell",
 		"test_create_spell_needs_its_payload", "test_created_spell_stays_put",
 		"test_spell_absorbs_mana", "test_invalid_created_spell", "test_infinite_mana",
+		"test_inventory", "test_chosen_noun", "test_target_of_selector", "test_target_of_move",
+		"test_target_of_create", "test_target_of_nests", "test_target_of_non_spell",
 		"test_create_sustains_its_objects", "test_create_keeps_creating", "test_spells_last_longer",
 	]:
 		call(t)
@@ -389,6 +391,125 @@ func test_spells_last_longer() -> void:
 	check(not host.dead, "A 2-word spell with 10 mana runs for 20 s")
 	run(sim, 6 * Simulation.TICK_RATE)
 	check(host.dead, "...and ends when its mana runs out, at 25 s")
+
+
+const DESTROY_CHOSEN := {"verb": "destroy", "what": {"ref": "chosen"}}
+
+
+func spell_world() -> Array:
+	var w := world()
+	w[1].tags["infinite_mana"] = true
+	return w
+
+
+func test_inventory() -> void:
+	var w := spell_world()
+	var sim: Simulation = w[0]
+	var p: WorldObject = w[1]
+	var selector := sim.cast(p, {"verb": "select", "qualifier": "player"}, Vector2.ZERO)
+	var fire := sim.cast(p, {"verb": "create", "what": {"material": "fire"}}, Vector2(400, 360))
+	var warden := sim.cast(p, FIRE_WARDEN, Vector2(400, 360))
+	var created: WorldObject = warden.spell.what
+	check(sim.inventory(p) == [selector, fire, warden], "Inventory lists the spells attached to the caster, oldest first")
+	check(not created in sim.inventory(p), "A spell created by a spell isn't attached, so isn't in the inventory")
+	sim.cast(p, {"verb": "move", "what": {"closest": "stone"}, "to": {"ref": "held"}}, Vector2.ZERO)
+	check(not selector in sim.inventory(p), "A selector taken with Held leaves the inventory")
+
+
+func test_chosen_noun() -> void:
+	var w := spell_world()
+	var sim: Simulation = w[0]
+	var p: WorldObject = w[1]
+	var selector := sim.cast(p, {"verb": "select", "qualifier": "player"}, Vector2.ZERO)
+	var fire := sim.cast(p, {"verb": "create", "what": {"material": "fire"}}, Vector2(400, 360))
+	sim.cast(p, DESTROY_CHOSEN, Vector2.ZERO, selector.id)
+	run(sim, 4)
+	check(selector.dead and not fire.dead, "Destroy Chosen destroys the chosen spell, and only it")
+	check(SpellGrammar.to_text(DESTROY_CHOSEN) == "Destroy Chosen.", "Chosen reads as a noun")
+
+	var dummy := sim.spawn(Materials.make_player(Vector2(900, 360)))
+	var stray := sim.cast(p, DESTROY_CHOSEN, Vector2.ZERO, dummy.id)
+	run(sim, 1)
+	check(stray.dead and dummy.health == dummy.max_health, "Chosen only accepts a spell in the caster's inventory")
+	var nothing := sim.cast(p, DESTROY_CHOSEN, Vector2.ZERO)
+	run(sim, 1)
+	check(nothing.dead, "With nothing chosen, Chosen points at nothing and the spell ends")
+
+
+func test_target_of_selector() -> void:
+	var w := spell_world()
+	var sim: Simulation = w[0]
+	var p: WorldObject = w[1]
+	var stone := sim.spawn(Materials.make("stone", Vector2(500, 360)))
+	var a := sim.spawn(Materials.make_player(Vector2(900, 150)))
+	var b := sim.spawn(Materials.make_player(Vector2(900, 650)))
+	var selector := sim.cast(p, {"verb": "select", "qualifier": "player"}, Vector2.ZERO)
+	var ast := {"verb": "move", "what": {"closest": "stone"}, "to": {"target_of": {"ref": "chosen"}}}
+	check(SpellGrammar.to_text(ast) == "Move (Closest Stone) to (Target of Chosen).", "Target of reads as a noun")
+	var mover := sim.cast(p, ast, Vector2.ZERO, selector.id)
+	run(sim, 4)
+	check(mover.spell.destination() == a and heading(stone).dot(stone.pos.direction_to(a.pos)) > 0.95,
+		"Target of a selector is its pick")
+	p.pos = Vector2(200, 650)
+	run(sim, 2)
+	check(mover.spell.destination() == b, "Target of is re-checked every tick")
+	check(selector in sim.inventory(p), "Target of only looks; the selector stays in the inventory")
+
+
+func test_target_of_move() -> void:
+	var w := spell_world()
+	var sim: Simulation = w[0]
+	var p: WorldObject = w[1]
+	var stone := sim.spawn(Materials.make("stone", Vector2(700, 360)))
+	var pull := sim.cast(p, {"verb": "move", "what": {"closest": "stone"}, "to": {"ref": "me"}}, Vector2.ZERO)
+	sim.cast(p, {"verb": "destroy", "what": {"target_of": {"ref": "chosen"}}}, Vector2.ZERO, pull.id)
+	run(sim, 2 * Simulation.TICK_RATE)
+	check(stone.dead, "Target of a Move is the object it moves")
+
+
+func test_target_of_create() -> void:
+	var w := spell_world()
+	var sim: Simulation = w[0]
+	var p: WorldObject = w[1]
+	var stone := sim.spawn(Materials.make("stone", Vector2(700, 600)))
+	var maker := sim.cast(p, {"verb": "create", "what": {"material": "wood"}}, Vector2(400, 360))
+	var first: WorldObject = maker.spell.created[0]
+	var ast := {"verb": "move", "what": {"closest": "stone"}, "to": {"target_of": {"ref": "chosen"}}}
+	var mover := sim.cast(p, ast, Vector2.ZERO, maker.id)
+	check(mover.spell.destination() == first, "Target of a Create is its product")
+	run(sim, 3 * Simulation.TICK_RATE)
+	check(maker.spell.created.size() > 1 and mover.spell.destination() == maker.spell.created.back(),
+		"...its newest product, as it keeps creating")
+	var warden := sim.cast(p, FIRE_WARDEN, Vector2(400, 360))
+	var look := sim.cast(p, {"verb": "destroy", "what": {"target_of": {"ref": "chosen"}}}, Vector2.ZERO, warden.id)
+	var made: WorldObject = warden.spell.what
+	check(made.spell != null and look.spell.target() == made, "Target of a Create Spell is the spell it made")
+
+
+func test_target_of_nests() -> void:
+	var w := spell_world()
+	var sim: Simulation = w[0]
+	var p: WorldObject = w[1]
+	var dummy := sim.spawn(Materials.make_player(Vector2(900, 360)))
+	var selector := sim.cast(p, {"verb": "select", "qualifier": "player"}, Vector2.ZERO)
+	var aimer := sim.cast(p, {"verb": "destroy", "what": {"ref": "held"}}, Vector2.ZERO)
+	check(aimer.spell.target() == dummy, "Held follows the selector's pick")
+	var ast := {"verb": "destroy", "what": {"target_of": {"target_of": {"ref": "chosen"}}}}
+	check(SpellGrammar.validate(ast) == "", "Target of nests")
+	var outer := sim.cast(p, ast, Vector2.ZERO, aimer.id)
+	check(outer.spell.target() == null, "Target of (Target of a Destroy) is the target's own target: none here")
+	var via_selector := sim.cast(p, {"verb": "destroy", "what": {"target_of": {"ref": "chosen"}}}, Vector2.ZERO, aimer.id)
+	check(via_selector.spell.target() == dummy, "Target of a spell following a selector is that selector's pick")
+
+
+func test_target_of_non_spell() -> void:
+	var w := spell_world()
+	var sim: Simulation = w[0]
+	var p: WorldObject = w[1]
+	sim.spawn(Materials.make("fire", Vector2(500, 360)))
+	var host := sim.cast(p, {"verb": "destroy", "what": {"target_of": {"closest": "fire"}}}, Vector2.ZERO)
+	run(sim, 1)
+	check(host.dead and count(sim, "fire") == 1, "Target of something that isn't a spell is nothing")
 
 
 func test_deterministic() -> void:

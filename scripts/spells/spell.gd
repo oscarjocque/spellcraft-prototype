@@ -29,8 +29,11 @@ var created: Array[WorldObject] = []  # every object this Create has made
 var to: WorldObject  # Move's destination, locked at cast
 var current: WorldObject  # a selector spell's pick this tick
 var taken_by: WorldObject  # for a held selector: the spell that took it in
-var _what_follows := false  # `what` is a selector this spell follows
-var _to_follows := false
+var chosen: WorldObject  # the inventory spell the noun Chosen means
+# How many times to take "the target of" `what` / `to` to get what this spell
+# acts on now: 0 = the object itself; 1 for a followed selector or Target of.
+var _what_hops := 0
+var _to_hops := 0
 
 var _drain := {}  # color -> mana per tick
 var _dir := Vector2.RIGHT  # the direction it was cast in
@@ -80,16 +83,19 @@ func on_cast(sim: Simulation, aim: Vector2) -> void:
 				_build_step = 1.0 / (CREATE_TICKS_PER_RADIUS * _full_radius)
 				_start_object(sim)
 		"destroy":
-			what = _resolve(ast["what"], sim)
-			_what_follows = _follows(ast["what"], what)
+			var slot := _slot(ast["what"], sim)
+			what = slot[0]
+			_what_hops = slot[1]
 		"move":
-			what = _resolve(ast["what"], sim)
-			to = _resolve(ast["to"], sim)
-			_what_follows = _follows(ast["what"], what)
-			_to_follows = _follows(ast["to"], to)
+			var slot := _slot(ast["what"], sim)
+			what = slot[0]
+			_what_hops = slot[1]
+			slot = _slot(ast["to"], sim)
+			to = slot[0]
+			_to_hops = slot[1]
 		"select":
 			current = _closest(sim, ast["qualifier"])
-	caster.last_it = host if is_selector() else what
+	caster.last_it = host if is_selector() else target()
 
 
 ## Starts building the next object of a Create line, just past the last one.
@@ -111,7 +117,7 @@ func _create_spell(sim: Simulation, inner: Dictionary, pos: Vector2) -> WorldObj
 	for c in reserve:
 		inner_fuel[c] = reserve[c] - inner_reserve.get(c, 0.0)
 	reserve = {}
-	return sim.start_spell(inner, caster, pos, inner_fuel, inner_reserve, pos + _dir * 100.0, false)
+	return sim.start_spell(inner, caster, pos, inner_fuel, inner_reserve, pos + _dir * 100.0, false, chosen)
 
 
 ## Runs every tick. Returns false once the spell has ended.
@@ -149,12 +155,12 @@ func tick(sim: Simulation) -> bool:
 			var dest := destination()
 			if subject == null or dest == null:
 				return false
-			# A chase after a selector's pick keeps going when it arrives or is
-			# blocked (it slides around what blocks it); other moves are done.
+			# A chase after another spell's target keeps going when it arrives or
+			# is blocked (it slides around what blocks it); other moves are done.
 			if subject.blocked:
-				return _to_follows
+				return _to_hops > 0
 			if subject.pos.distance_to(dest.pos) - subject.radius - dest.radius <= 2.0:
-				return _to_follows
+				return _to_hops > 0
 			subject.velocity = subject.pos.direction_to(dest.pos) * MOVE_SPEED
 			return true
 		"select":
@@ -163,28 +169,40 @@ func tick(sim: Simulation) -> bool:
 	return false
 
 
-## What the spell acts on right now, or null if that is gone.
+## What the spell acts on right now, or null if that is gone: a selector's
+## pick, the object a Destroy or Move acts on, or a Create's product (the
+## newest object in its line, or the spell it created).
 func target() -> WorldObject:
-	return current if is_selector() else _live(what, _what_follows)
+	return current if is_selector() else _live(what, _what_hops)
 
 
 func destination() -> WorldObject:
-	return _live(to, _to_follows)
+	return _live(to, _to_hops)
 
 
-## A followed selector stands for whatever it picks now, so destroying the
-## selector cuts off every spell that follows it.
-static func _live(o: WorldObject, follows: bool) -> WorldObject:
-	if follows and o != null and not o.dead:
-		o = o.spell.current
+## Follows "the target of" `hops` times from `o`. Spells only refer to older
+## spells, so the chain always ends. Destroying a spell in it cuts off every
+## spell that goes through it.
+static func _live(o: WorldObject, hops: int) -> WorldObject:
+	for i in hops:
+		if o == null or o.dead or o.spell == null:
+			return null
+		o = o.spell.target()
 	if o == null or o.dead:
 		return null
 	return o
 
 
-## Held, or "It" naming a selector spell, means: follow whatever it picks now.
-static func _follows(noun: Dictionary, o: WorldObject) -> bool:
-	return noun.get("ref", "") in ["it", "held"] and o != null and o.spell != null and o.spell.is_selector()
+## Locks a noun at cast: [object, hops]. Target of adds a hop; Held, or "It"
+## naming a selector spell, means following whatever that selector picks now.
+func _slot(noun: Dictionary, sim: Simulation) -> Array:
+	if noun.has("target_of"):
+		var inner := _slot(noun["target_of"], sim)
+		return [inner[0], inner[1] + 1]
+	var o := _resolve(noun, sim)
+	var follows: bool = noun.get("ref", "") in ["it", "held"] and o != null and o.spell != null \
+			and o.spell.is_selector()
+	return [o, 1 if follows else 0]
 
 
 func _resolve(noun: Dictionary, sim: Simulation) -> WorldObject:
@@ -197,6 +215,8 @@ func _resolve(noun: Dictionary, sim: Simulation) -> WorldObject:
 				if held != null:
 					held.spell.taken_by = host  # it now belongs to this spell
 				return held
+			"chosen":
+				return chosen if chosen != host else null
 		return caster.last_it
 	return _closest(sim, noun["closest"])
 

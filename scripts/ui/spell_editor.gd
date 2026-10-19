@@ -117,21 +117,28 @@ func _add_creation(row: HBoxContainer, what: Dictionary, refresh: Callable) -> v
 		row.add_child(_text("]"))
 
 
-## A noun slot: Me, It, Held, or Closest followed by a qualifier.
+## A noun slot: Me, It, Held, Chosen, Closest followed by a qualifier, or
+## Target of followed by another noun.
 func _add_noun(row: HBoxContainer, noun: Dictionary, refresh: Callable) -> void:
-	var kinds := ["Me", "It", "Held", "Closest"]
-	var current := 3 if noun.has("closest") else SpellGrammar.REFS.find(noun["ref"])
+	var kinds := ["Me", "It", "Held", "Chosen", "Closest", "Target of"]
+	var refs := SpellGrammar.REFS.size()
+	var current := refs if noun.has("closest") else refs + 1 if noun.has("target_of") \
+			else SpellGrammar.REFS.find(noun["ref"])
 	var kind := _picker(kinds, current)
 	kind.item_selected.connect(func(idx: int) -> void:
 		noun.clear()
-		if idx == 3:
+		if idx == refs:
 			noun["closest"] = "fire"
+		elif idx == refs + 1:
+			noun["target_of"] = {"ref": "chosen"}
 		else:
 			noun["ref"] = SpellGrammar.REFS[idx]
 		refresh.call())
 	row.add_child(kind)
 	if noun.has("closest"):
 		row.add_child(_word_picker(SpellGrammar.QUALIFIERS, noun, "closest", refresh))
+	elif noun.has("target_of"):
+		_add_noun(row, noun["target_of"], refresh)
 
 
 func _word_picker(words: Array, target: Dictionary, key: String, refresh: Callable) -> OptionButton:

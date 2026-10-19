@@ -4,14 +4,17 @@ extends CanvasLayer
 
 var _top: RichTextLabel
 var _bottom: RichTextLabel
+var _inventory: RichTextLabel
 
 
 func _ready() -> void:
 	_top = _make_label(Vector2(12, 8))
 	_bottom = _make_label(Vector2(12, 520))
+	_inventory = _make_label(Vector2(860, 8))
+	_inventory.size.x = 410
 
 
-func refresh(sim: Simulation, player: WorldObject, slots: Array, selected: int) -> void:
+func refresh(sim: Simulation, player: WorldObject, slots: Array, selected: int, chosen: WorldObject) -> void:
 	var mana := "[b]Mana[/b]  "
 	if player.has_tag("infinite_mana"):
 		mana += "infinite"
@@ -32,8 +35,17 @@ func refresh(sim: Simulation, player: WorldObject, slots: Array, selected: int) 
 		text += ("[b][color=#ffd34d]> %s[/color][/b]" % line if i == selected else "   " + line) + "\n"
 	for m in sim.messages:
 		text += "[color=#ff8a8a]%s[/color]\n" % m
-	text += "[color=#8a8f98]WASD move · 1-9 pick spell · left click cast at cursor · Tab edit spells · R reset[/color]"
+	text += "[color=#8a8f98]WASD move · 1-9 pick spell · left click cast at cursor · Q/E choose attached spell · Tab edit spells · R reset[/color]"
 	_bottom.text = text
+
+	var inv := "[b]Attached spells[/b]  [color=#8a8f98]Q/E: choose[/color]\n"
+	var attached := sim.inventory(player)
+	if attached.is_empty():
+		inv += "[color=#8a8f98]none[/color]"
+	for o in attached:
+		var line := SpellGrammar.to_text(o.spell.ast)
+		inv += ("[b][color=#ffd34d]> %s  (Chosen)[/color][/b]" % line if o == chosen else "   " + line) + "\n"
+	_inventory.text = inv
 
 
 func _make_label(pos: Vector2) -> RichTextLabel:

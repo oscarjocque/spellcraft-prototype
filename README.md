@@ -19,6 +19,7 @@ selector are enough to build spells that interact in ways nobody scripted.
 | --- | --- |
 | WASD / arrows | Move |
 | 1–9 | Pick a spell slot |
+| Q / E | Choose a spell in your inventory of attached spells |
 | Left click | Cast the selected spell toward the cursor |
 | Tab | Open or close the spell editor (pauses the simulation) |
 | R | Reset the sandbox |
@@ -36,7 +37,7 @@ diamonds to collect mana.
 | Create's objects | Fire, Water, Wood, Stone, or Spell [*another spell*] |
 | Qualifiers | Fire, Water, Wood, Stone, Spell, Player, Mana |
 | Selectors | Closest (takes a qualifier), inside a spell or cast on its own |
-| References | Me, It, Held |
+| References | Me, It, Held, Chosen, Target of *(noun)* |
 
 The preset slots cover every spell the design doc lists for this prototype:
 
@@ -69,6 +70,22 @@ ends at once.
 
 A Move chasing a held selector's pick doesn't end when it arrives or is
 blocked; it keeps chasing, sliding around obstacles, until its mana runs out.
+
+### Inventory, Chosen and Target of
+
+Every spell attached to you (one you cast that follows you and hasn't been
+taken with Held) is in your **inventory**, listed top right. **Q/E** choose
+one; until you do, the newest is chosen.
+
+- **Chosen** is the spell you have chosen, as a noun: `Destroy Chosen`
+  dispels exactly that spell.
+- **Target of** *noun* is what that spell acts on *right now*, re-checked
+  every tick: a selector's pick, the object a Move or Destroy acts on, or a
+  Create's product (the newest object in its line, or the spell it created).
+  It nests, and unlike Held it only looks: the spell stays in your inventory.
+  `Move (Closest Stone) to (Target of Chosen)` with a held `Closest Player`
+  chosen is a live tracker that leaves the selector free for other spells.
+  Target of something that isn't a spell is nothing, so the spell ends.
 
 ### Spells that create spells
 

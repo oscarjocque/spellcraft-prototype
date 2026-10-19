@@ -9,10 +9,14 @@ extends RefCounted
 ##   {"verb": "move", "what": NOUN, "to": NOUN}
 ##   {"verb": "select", "qualifier": "player"}   # a Closest selector on its own
 ##
-## NOUN is {"ref": "me"}, {"ref": "it"}, {"ref": "held"} or {"closest": QUALIFIER}.
+## NOUN is {"ref": "me"}, {"ref": "it"}, {"ref": "held"}, {"ref": "chosen"},
+## {"closest": QUALIFIER} or {"target_of": NOUN}.
 ## Held is the selector the caster is holding; the spell takes it over. An
 ## inline Closest chooses once, when the spell is cast; a held one keeps
 ## choosing, and the spell follows whatever it picks now.
+## Chosen is the spell the caster has chosen in their inventory of attached
+## spells. Target of a spell is what that spell acts on right now (a Create's
+## product, a selector's pick), re-checked every tick.
 ## Every block is one word and costs mana of one color. A created spell pays
 ## its own drain: the spell creating it must carry that mana as a reserve
 ## (see `payload`).
@@ -20,7 +24,7 @@ extends RefCounted
 const VERBS := ["create", "destroy", "move", "select"]
 const MATERIALS := ["fire", "water", "wood", "stone"]
 const QUALIFIERS := ["fire", "water", "wood", "stone", "spell", "player", "mana"]
-const REFS := ["me", "it", "held"]
+const REFS := ["me", "it", "held", "chosen"]
 const COLORS := ["red", "blue", "green", "violet"]
 const CREATED_SPELL_SECONDS := 60.0  # how long a created spell's mana must last
 
@@ -30,7 +34,7 @@ const BLOCK_COLOR := {
 	"water": "blue", "mana": "blue",
 	"move": "green", "stone": "green", "wood": "green",
 	"destroy": "violet", "closest": "violet", "spell": "violet", "player": "violet",
-	"me": "violet", "it": "violet", "held": "violet",
+	"me": "violet", "it": "violet", "held": "violet", "chosen": "violet", "target_of": "violet",
 }
 
 ## Mana per second each block drains while its spell is active.
@@ -69,6 +73,9 @@ static func own_blocks(ast: Dictionary) -> Array[String]:
 static func _noun_blocks(noun: Dictionary, out: Array[String]) -> void:
 	if noun.has("ref"):
 		out.append(noun["ref"])
+	elif noun.has("target_of"):
+		out.append("target_of")
+		_noun_blocks(noun["target_of"], out)
 	else:
 		out.append("closest")
 		out.append(noun["closest"])
@@ -136,6 +143,8 @@ static func _valid_noun(noun: Variant) -> bool:
 		return false
 	if noun.has("ref"):
 		return noun["ref"] in REFS
+	if noun.has("target_of"):
+		return _valid_noun(noun["target_of"])
 	return noun.get("closest", "") in QUALIFIERS
 
 
@@ -162,4 +171,6 @@ static func _sentence(ast: Dictionary) -> String:
 static func _noun_text(noun: Dictionary) -> String:
 	if noun.has("ref"):
 		return noun["ref"].capitalize()
+	if noun.has("target_of"):
+		return "(Target of %s)" % _noun_text(noun["target_of"])
 	return "(Closest %s)" % noun["closest"].capitalize()
