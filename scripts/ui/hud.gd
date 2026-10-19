@@ -14,7 +14,7 @@ func _ready() -> void:
 	_inventory.size.x = 410
 
 
-func refresh(sim: Simulation, player: WorldObject, slots: Array, selected: int, chosen: WorldObject) -> void:
+func refresh(sim: Simulation, player: WorldObject, slots: Array, selected: int) -> void:
 	var mana := "[b]Mana[/b]  "
 	if player.has_tag("infinite_mana"):
 		mana += "infinite"
@@ -35,16 +35,15 @@ func refresh(sim: Simulation, player: WorldObject, slots: Array, selected: int, 
 		text += ("[b][color=#ffd34d]> %s[/color][/b]" % line if i == selected else "   " + line) + "\n"
 	for m in sim.messages:
 		text += "[color=#ff8a8a]%s[/color]\n" % m
-	text += "[color=#8a8f98]WASD move · 1-9 pick spell · left click cast at cursor · Q/E choose attached spell · Tab edit spells · R reset[/color]"
+	text += "[color=#8a8f98]WASD move · 1-9 pick spell · left click cast at cursor · Tab edit spells · R reset[/color]"
 	_bottom.text = text
 
-	var inv := "[b]Attached spells[/b]  [color=#8a8f98]Q/E: choose[/color]\n"
+	var inv := "[b]Attached spells[/b]  [color=#8a8f98]Chosen picks from these[/color]\n"
 	var attached := sim.inventory(player)
 	if attached.is_empty():
 		inv += "[color=#8a8f98]none[/color]"
-	for o in attached:
-		var line := SpellGrammar.to_text(o.spell.ast)
-		inv += ("[b][color=#ffd34d]> %s  (Chosen)[/color][/b]" % line if o == chosen else "   " + line) + "\n"
+	for i in attached.size():
+		inv += "%d  %s\n" % [i + 1, SpellGrammar.to_text(attached[i].spell.ast)]
 	_inventory.text = inv
 
 

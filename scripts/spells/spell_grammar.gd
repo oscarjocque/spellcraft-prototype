@@ -14,8 +14,8 @@ extends RefCounted
 ## Held is the selector the caster is holding; the spell takes it over. An
 ## inline Closest chooses once, when the spell is cast; a held one keeps
 ## choosing, and the spell follows whatever it picks now.
-## Chosen is the spell the caster has chosen in their inventory of attached
-## spells. Target of a spell is what that spell acts on right now (a Create's
+## Chosen is a spell from the caster's inventory of attached spells, picked
+## for each Chosen when the spell is cast and stored in it as "id". Target of a spell is what that spell acts on right now (a Create's
 ## product, a selector's pick), re-checked every tick.
 ## Every block is one word and costs mana of one color. A created spell pays
 ## its own drain: the spell creating it must carry that mana as a reserve
@@ -156,6 +156,26 @@ static func _valid_noun(noun: Variant) -> bool:
 	if noun.has("target_of"):
 		return _valid_noun(noun["target_of"])
 	return noun.get("closest", "") in QUALIFIERS
+
+
+## Every Chosen noun in the spell, including in the spells it creates, in
+## reading order: the order the caster is asked to pick them in.
+static func chosen_nouns(ast: Dictionary) -> Array[Dictionary]:
+	var out: Array[Dictionary] = []
+	for key in ["what", "to"]:
+		if ast.get(key) is Dictionary:
+			_chosen_in(ast[key], out)
+	var inner := created_spell(ast)
+	if not inner.is_empty():
+		out.append_array(chosen_nouns(inner))
+	return out
+
+
+static func _chosen_in(noun: Dictionary, out: Array[Dictionary]) -> void:
+	if noun.get("ref", "") == "chosen":
+		out.append(noun)
+	elif noun.has("target_of"):
+		_chosen_in(noun["target_of"], out)
 
 
 static func to_text(ast: Dictionary) -> String:

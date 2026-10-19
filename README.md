@@ -19,7 +19,6 @@ selector are enough to build spells that interact in ways nobody scripted.
 | --- | --- |
 | WASD / arrows | Move |
 | 1–9 | Pick a spell slot |
-| Q / E | Choose a spell in your inventory of attached spells |
 | Left click | Cast the selected spell toward the cursor |
 | Tab | Open or close the spell editor (pauses the simulation) |
 | R | Reset the sandbox |
@@ -65,8 +64,8 @@ The noun **Held** puts the selector you're holding into the next spell you
 cast that uses it. That spell then follows whatever the selector picks *now*,
 where an inline `(Closest Player)` would choose once at cast and stay locked.
 The taken selector belongs to that spell: you no longer hold it, and it ends
-when the spell ends. If you hold nothing, Held points at nothing and the spell
-ends at once.
+when the spell ends. If you hold nothing, the spell waits and takes the next
+selector you hold.
 
 A Move chasing a held selector's pick doesn't end when it arrives or is
 blocked; it keeps chasing, sliding around obstacles, until its mana runs out.
@@ -74,18 +73,32 @@ blocked; it keeps chasing, sliding around obstacles, until its mana runs out.
 ### Inventory, Chosen and Target of
 
 Every spell attached to you (one you cast that follows you and hasn't been
-taken with Held) is in your **inventory**, listed top right. **Q/E** choose
-one; until you do, the newest is chosen.
+taken with Held) is in your **inventory**, listed top right.
 
-- **Chosen** is the spell you have chosen, as a noun: `Destroy Chosen`
-  dispels exactly that spell.
+- **Chosen** is one of those spells, as a noun: `Destroy Chosen` dispels
+  exactly the spell you pick. When you cast a spell with Chosen in it, a
+  window opens for **each** Chosen, in reading order (including those in a
+  spell it creates), and you pick an attached spell for it, or Nothing. The
+  game pauses meanwhile; Esc cancels the cast. A spell can use several
+  Chosen, each meaning a different spell.
 - **Target of** *noun* is what that spell acts on *right now*, re-checked
   every tick: a selector's pick, the object a Move or Destroy acts on, or a
   Create's product (the newest object in its line, or the spell it created).
   It nests, and unlike Held it only looks: the spell stays in your inventory.
   `Move (Closest Stone) to (Target of Chosen)` with a held `Closest Player`
   chosen is a live tracker that leaves the selector free for other spells.
-  Target of something that isn't a spell is nothing, so the spell ends.
+  Target of something that isn't a spell is nothing, so the spell waits.
+
+### Spells wait for a target
+
+A spell with nothing to act on doesn't end: it waits, still draining mana,
+and looks again every tick for anything its nouns can mean. `Destroy
+(Closest Fire)` cast with no fire around destroys the next fire that appears;
+`Move ... to Held` with no held selector takes the next one you cast. A spell
+still ends when it reaches its goal (what a Destroy locked onto is gone), when
+a spell it follows is destroyed (it's cut off), or when its mana runs out. A
+Move whose object or destination is destroyed looks for another, and a
+Destroy following a selector goes on to the selector's next pick.
 
 ### Spells that create spells
 

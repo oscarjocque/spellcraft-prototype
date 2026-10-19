@@ -2,6 +2,7 @@ class_name Spell
 extends RefCounted
 ## A cast spell. It lives on its own world object (the host) and performs its
 ## verb every tick until it reaches its goal, runs out of mana, or is destroyed.
+## A spell with nothing to act on waits, looking again every tick.
 ## Create has no goal: it builds one object after another in a line along the
 ## direction it was cast, sustaining each finished one (fire doesn't burn out),
 ## until its mana runs out. Create Spell likewise makes a line of spells, one
@@ -34,7 +35,6 @@ var created: Array[WorldObject] = []  # every object this Create has made
 var to: WorldObject  # Move's destination, locked at cast
 var current: WorldObject  # a selector spell's pick this tick
 var taken_by: WorldObject  # for a held selector: the spell that took it in
-var chosen: WorldObject  # the inventory spell the noun Chosen means
 # How many times to take "the target of" `what` / `to` to get what this spell
 # acts on now: 0 = the object itself; 1 for a followed selector or Target of.
 var _what_hops := 0
@@ -91,16 +91,10 @@ func on_cast(sim: Simulation, aim: Vector2) -> void:
 				_build_step = 1.0 / (CREATE_TICKS_PER_RADIUS * _full_radius)
 				_start_object(sim)
 		"destroy":
-			var slot := _slot(ast["what"], sim)
-			what = slot[0]
-			_what_hops = slot[1]
+			_lock_what(sim)
 		"move":
-			var slot := _slot(ast["what"], sim)
-			what = slot[0]
-			_what_hops = slot[1]
-			slot = _slot(ast["to"], sim)
-			to = slot[0]
-			_to_hops = slot[1]
+			_lock_what(sim)
+			_lock_to(sim)
 		"select":
 			current = _closest(sim, ast["qualifier"])
 	caster.last_it = host if is_selector() else target()
@@ -160,7 +154,7 @@ func _create_spell(sim: Simulation) -> void:
 	var paid := SpellGrammar.share(_inner)
 	for c in paid:
 		reserve[c] = maxf(0.0, reserve.get(c, 0.0) - paid[c])
-	what = sim.start_spell(_inner, caster, pos, inner_fuel, inner_reserve, pos + _dir * 100.0, false, chosen)
+	what = sim.start_spell(_inner, caster, pos, inner_fuel, inner_reserve, pos + _dir * 100.0, false)
 	created.append(what)
 	_spell_timer = 0
 
@@ -197,16 +191,29 @@ func tick(sim: Simulation) -> bool:
 					o.lifetime = _lifetime  # sustained: none expire while the spell lasts
 			return true
 		"destroy":
+			if what != null and what.dead:
+				return false  # destroyed, its goal; or the spell it followed is gone
+			if what == null:
+				_lock_what(sim)
 			var subject := target()
 			if subject == null:
-				return false
+				return true  # nothing to destroy yet: wait
 			subject.health -= DESTROY_RATE * Simulation.DT
-			return subject.health > 0.0
+			# Following a selector, it goes on to the selector's next pick.
+			return subject.health > 0.0 or _what_hops > 0
 		"move":
+			# A spell it follows being destroyed cuts it off; an object it moves
+			# or moves to being destroyed just sends it looking for another.
+			if (what != null and what.dead and _what_hops > 0) or (to != null and to.dead and _to_hops > 0):
+				return false
+			if what == null or what.dead:
+				_lock_what(sim)
+			if to == null or to.dead:
+				_lock_to(sim)
 			var subject := target()
 			var dest := destination()
 			if subject == null or dest == null:
-				return false
+				return true  # nothing to move, or nowhere to move it, yet: wait
 			# A chase after another spell's target keeps going when it arrives or
 			# is blocked (it slides around what blocks it); other moves are done.
 			if subject.blocked:
@@ -246,7 +253,21 @@ static func _live(o: WorldObject, hops: int) -> WorldObject:
 	return o
 
 
-## Locks a noun at cast: [object, hops]. Target of adds a hop; Held, or "It"
+## Locks `what` / `to` from their nouns. A noun that finds nothing is tried
+## again every tick while the spell waits.
+func _lock_what(sim: Simulation) -> void:
+	var slot := _slot(ast["what"], sim)
+	what = slot[0]
+	_what_hops = slot[1]
+
+
+func _lock_to(sim: Simulation) -> void:
+	var slot := _slot(ast["to"], sim)
+	to = slot[0]
+	_to_hops = slot[1]
+
+
+## Locks a noun: [object, hops]. Target of adds a hop; Held, or "It"
 ## naming a selector spell, means following whatever that selector picks now.
 func _slot(noun: Dictionary, sim: Simulation) -> Array:
 	if noun.has("target_of"):
@@ -269,7 +290,11 @@ func _resolve(noun: Dictionary, sim: Simulation) -> WorldObject:
 					held.spell.taken_by = host  # it now belongs to this spell
 				return held
 			"chosen":
-				return chosen if chosen != host else null
+				# Only a spell really in the caster's inventory counts.
+				for o in sim.inventory(caster):
+					if o.id == noun.get("id", 0) and o != host:
+						return o
+				return null
 		return caster.last_it
 	return _closest(sim, noun["closest"])
 
