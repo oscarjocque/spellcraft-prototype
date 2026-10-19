@@ -47,6 +47,7 @@ var current: Array[WorldObject] = []  # for Hold: what it holds this tick
 var _what := {}
 var _to := {}
 var _at := {}
+var _at_pos := Vector2.INF  # where Create's "at" was last seen
 var _from_bindings: Array = []  # [noun, binding] pairs for pickers' "to"/"of" nouns
 var _done := {}  # Move: objects that arrived or were blocked
 
@@ -438,15 +439,18 @@ func _hold(sim: Simulation) -> Array[WorldObject]:
 
 # --- Create ------------------------------------------------------------------
 
-## Where a Create line starts: at its "at" noun if it has one (nowhere while
-## that names nothing), else just outside the spell's anchor.
+## Where a Create line starts: at its "at" noun if it has one, else just
+## outside the spell's anchor. If what it's at is destroyed, the line stays
+## where that was; until the noun names anything, there's nowhere yet.
 func _line_start(sim: Simulation, radius: float) -> Vector2:
 	if not ast.get("at") is Dictionary:
 		return host.pos + _dir * (_edge + radius)
-	if _state(_at) != "ok":
+	if _state(_at) == "unbound":
 		_at = _bind(ast["at"], sim)
 	var at := _eval(_at)
-	return at[0].pos if not at.is_empty() else Vector2.INF
+	if not at.is_empty():
+		_at_pos = at[0].pos
+	return _at_pos
 
 
 ## Starts building the next object of a Create line in its nearest free
@@ -481,10 +485,16 @@ func _free_place(start: Vector2, step: float, radius: float, free: Callable) -> 
 	return Vector2.INF
 
 
-## No physical object (a Thing) overlaps a circle of `radius` at `at`.
+## Whether a new object of this Create's material fits at `at`. Something
+## solid needs room among solid things; something that isn't (fire, water)
+## can lie on top of other things, so Create Fire at a wooden wall sets it
+## burning, but never on its own material.
 func _is_clear(sim: Simulation, at: Vector2, radius: float) -> bool:
+	var solid: bool = Materials.PROPS[_material]["solid"]
 	for o in sim.objects:
-		if not o.dead and o.matches("thing") and at.distance_to(o.pos) < o.radius + radius:
+		if o.dead or not o.matches("thing") or at.distance_to(o.pos) >= o.radius + radius:
+			continue
+		if o.material == _material or (solid and o.solid):
 			return false
 	return true
 

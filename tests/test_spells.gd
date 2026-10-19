@@ -785,6 +785,28 @@ func test_create_at() -> void:
 	check(host.spell.what.pos.distance_to(Vector2(900, 200)) < 1.0, "Create at starts its line there")
 
 
+func test_create_fire_at_aimed() -> void:
+	var w := spell_world()
+	var sim: Simulation = w[0]
+	var p: WorldObject = w[1]
+	var wood := sim.spawn(Materials.make("wood", Vector2(600, 360)))
+	var host := sim.cast(p, {"verb": "create", "what": {"material": "fire"}, "at": {"ref": "aimed"}}, Vector2(1000, 360))
+	check(host.spell.what.pos == wood.pos, "Fire is created on what is aimed at, not pushed past it")
+	run(sim, 4 * Simulation.TICK_RATE)
+	check(wood.dead, "...so it sets it burning")
+	var first: WorldObject = host.spell.created[0]
+	check(first.pos == Vector2(600, 360) and host.spell.created.all(func(o: WorldObject) -> bool: return o.pos.x >= 600.0),
+		"Once it is gone, the line stays where it was")
+	var water := sim.cast(p, {"verb": "create", "what": {"material": "water"}, "at": {"ref": "this", "id": first.id}}, Vector2(1000, 360))
+	run(sim, 2)
+	check(first.dead and water.spell.what.pos == Vector2(600, 360), "Water created on fire puts it out")
+	var fires_at := host.spell.created.filter(func(o: WorldObject) -> bool: return not o.dead).map(func(o: WorldObject) -> Vector2: return o.pos)
+	var unique := {}
+	for pos in fires_at:
+		unique[pos] = true
+	check(unique.size() == fires_at.size(), "A Create never stacks two of its material in one place")
+
+
 func test_alternate() -> void:
 	var w := spell_world()
 	var sim: Simulation = w[0]
