@@ -1079,6 +1079,14 @@ func test_parse_typed() -> void:
 		"craete wod": "Create Wood.",
 		"move ths to there": "Move This to There.",
 		"mark all movng stones": "Mark (All Moving Stone).",
+		# Everyday words, and a, an, the.
+		"make a fire": "Create Fire.",
+		"kill the nearest rock": "Destroy (Closest Stone).",
+		"pull stone": "Move (Closest Stone) to Me.",
+		"bring the furthest player": "Move (Farthest Player) to Me.",
+		"grab every rock": "Hold (All Stone).",
+		"tag everything within 3 of me": "Mark (All Thing within 3 m of Me).",
+		"put the rock there": "Move (Closest Stone) to There.",
 	}
 	for typed in cases:
 		var r := SpellParser.parse(typed)
@@ -1263,3 +1271,39 @@ func test_cast_flow() -> void:
 	check(not flow.busy() and flow.take().is_empty(), "Cancelling sends nothing")
 	flow.begin(SpellParser.parse("destroy this")["ast"], Vector2.ZERO, null)
 	check(flow.picking() == "this", "With nothing under the mouse, This is asked for")
+
+
+func test_every_script_compiles() -> void:
+	var dirs := ["res://scripts"]
+	while not dirs.is_empty():
+		var dir: String = dirs.pop_back()
+		for sub in DirAccess.get_directories_at(dir):
+			dirs.append(dir.path_join(sub))
+		for file in DirAccess.get_files_at(dir):
+			if file.ends_with(".gd"):
+				var script: GDScript = load(dir.path_join(file))
+				check(script != null and script.can_instantiate(), "%s compiles" % file)
+
+
+func test_parser_fuzz() -> void:
+	var words: Array = SpellParser.VERB_WORDS + SpellParser.NOUN_WORDS + SpellParser.QUALIFIER_WORDS \
+			+ SpellGrammar.ADJECTIVES + SpellParser.SYNONYMS.keys() + SpellParser.FILLERS \
+			+ ["to", "of", "at", "within", "up", "3", "2", "5", ",", "(", ")", "[", "]", "mo", "st", "cl", "fier"]
+	var rng := RandomNumberGenerator.new()
+	rng.seed = 11
+	var read := 0
+	var bad := []
+	for n in 400:
+		var text := ""
+		for k in rng.randi_range(1, 7):
+			text += words[rng.randi_range(0, words.size() - 1)] + " "
+		var r := SpellParser.parse(text)
+		SpellParser.suggest(text.strip_edges())
+		if not r.has("ast"):
+			continue
+		read += 1
+		var back := SpellParser.parse(SpellGrammar.to_text(r["ast"]))
+		if SpellGrammar.validate(r["ast"], false) != "" or back.get("ast") != r["ast"]:
+			bad.append(text)
+	check(read > 15, "Random words sometimes read as spells (%d of 400)" % read)
+	check(bad.is_empty(), "Every spell read from random words is valid and reads back the same: %s" % [bad.slice(0, 3)])

@@ -5,13 +5,13 @@ extends PanelContainer
 
 const GROUPS := [
 	["Verbs", ["create", "destroy", "move", "mark", "", "alternate"],
-		"Hold (a noun on its own) is free · leave out what a verb acts on: This · where Move goes: There"],
+		"a noun alone: Hold · no noun: This · Move with no place: There"],
 	["Things", ["thing", "fire", "water", "wood", "stone", "spell", "player", "mana"],
 		"a thing on its own means the closest one"],
 	["Pickers", ["closest", "farthest", "random", "all"], ""],
 	["Adjectives", ["moving", "burning", "mine", "theirs", "marked"], "go before the thing"],
 	["Nouns", ["me", "here", "aimed", "this", "there", "chosen", "it"],
-		"This and There come from the mouse, Chosen from your attached spells, It only inside Alternate"],
+		"This, There: the mouse · Chosen: an attached spell · It: in Alternate"],
 	["Of", ["target_of", "caster_of", "maker_of", "products_of"], "followed by a noun"],
 	["Extras", ["within", "from", "at", "up_to"], "within 3 m (of …)  ·  to …  ·  Create … at …  ·  …, up to 2"],
 ]
@@ -19,6 +19,7 @@ const EXAMPLES := [
 	"mo st", "de", "destroy all fires within 3 of here", "create fire at there",
 	"move this to there", "mark all moving stones, up to 2", "closest player",
 	"move stone to target of chosen", "create spell [destroy fire]", "alternate 5 6", "mvoe stoen to me",
+	"pull the nearest rock",
 ]
 
 var _text: RichTextLabel
@@ -36,7 +37,7 @@ func _ready() -> void:
 	_text.bbcode_enabled = true
 	_text.fit_content = true
 	_text.scroll_active = false
-	_text.custom_minimum_size.x = 760
+	_text.custom_minimum_size.x = 840
 	_text.mouse_filter = Control.MOUSE_FILTER_IGNORE
 	add_child(_text)
 	_text.text = _build()
@@ -49,7 +50,7 @@ func toggle() -> void:
 	if visible:
 		move_to_front()
 		reset_size()
-		position = Vector2((get_viewport_rect().size.x - size.x) / 2, 40)
+		position = Vector2((get_viewport_rect().size.x - size.x) / 2, 12)
 
 
 static func _build() -> String:
@@ -73,5 +74,6 @@ static func _build() -> String:
 		var r := SpellParser.parse(e)
 		var reads: String = SpellText.bbcode(r["ast"]) if r.has("ast") else ""
 		out += "   [code]%s[/code]   [color=#%s]→[/color]   %s\n" % [e, grey, reads]
-	out += "\n[color=#%s]Words can be cut short (mo = move, st = stone), and a slip of one letter is forgiven. Tab takes a suggestion.[/color]" % grey
+	out += ("\n[color=#%s]Cut words short (mo = move), slips are forgiven, everyday words work (make, kill, grab, pull, "
+			+ "nearest, rock), a and the are skipped. Tab takes a suggestion.[/color]") % grey
 	return out

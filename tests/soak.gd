@@ -10,7 +10,8 @@ const TYPED := ["mo st me", "destroy all fires within 3 of here, up to 2", "crea
 	"move this to there", "mark all moving stones", "closest player", "move stone to target of chosen",
 	"create spell [destroy fire]", "alternate 5 chosen", "create wood at aimed", "hold all things within 2 of me",
 	"destroy products of chosen", "move all players to farthest stone", "mark random burning thing",
-	"de", "mo st", "mvoe stoen to me", "hold", "create fire at there", "move to me"]
+	"de", "mo st", "mvoe stoen to me", "hold", "create fire at there", "move to me",
+	"kill the nearest rock", "pull stone", "make a fire", "tag everything within 3 of me"]
 func _initialize():
 	rng.seed = 7
 	Spellbook.path = "user://soak_spellbook.txt"  # leave the real spellbook alone

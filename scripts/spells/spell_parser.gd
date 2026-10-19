@@ -18,6 +18,9 @@ extends RefCounted
 ## the mouse is on, "move stone" moves the closest stone to the mouse.
 ## A word one slip from fitting (a letter missing, extra, wrong or swapped)
 ## is read as the word it nearly is, if nothing reads without that.
+## "A", "an" and "the" are skipped, and everyday words stand in for the
+## spell's own: "make a fire", "kill the nearest rock", "pull stone" (Move
+## it to Me). Suggestions only offer the spell's own words.
 
 const VERB_WORDS := ["move", "create", "destroy", "mark", "hold", "alternate"]
 ## Noun words, most useful first: the order suggestions and ambiguous
@@ -29,6 +32,18 @@ const QUALIFIER_WORDS := ["stone", "fire", "player", "thing", "wood", "water", "
 const SLOT_KEYS := [1, 2, 3, 4, 5, 6, 7, 8, 9, 0]  # slot numbers as on the keys
 const RELATION_WORDS := {"target": "target_of", "caster": "caster_of", "maker": "maker_of",
 		"products": "products_of"}
+const FILLERS := ["a", "an", "the"]
+## Everyday words and what they stand for ("pull" is Move ... to Me).
+const SYNONYMS := {
+	"make": "create", "spawn": "create", "summon": "create", "conjure": "create",
+	"kill": "destroy", "break": "destroy", "remove": "destroy", "delete": "destroy",
+	"grab": "hold", "take": "hold", "select": "hold", "tag": "mark",
+	"put": "move", "send": "move", "bring": "pull",
+	"nearest": "closest", "furthest": "farthest", "every": "all", "each": "all", "any": "random",
+	"rock": "stone", "flame": "fire", "tree": "wood", "log": "wood",
+	"myself": "me", "self": "me", "my": "mine", "their": "theirs",
+	"everything": ["all", "thing"], "something": ["random", "thing"],
+}
 
 var _tokens: Array[String] = []
 var _forgiving := false  # read words one slip from fitting as the word
@@ -57,10 +72,24 @@ static func tokenize(text: String) -> Array[String]:
 	return out
 
 
+## `tokens` without fillers, with everyday words put as the spell's own.
+static func _plain(tokens: Array[String]) -> Array[String]:
+	var out: Array[String] = []
+	for t in tokens:
+		if t in FILLERS:
+			continue
+		var s: Variant = SYNONYMS.get(t, SYNONYMS.get(t.trim_suffix("s"), t))
+		if s is Array:
+			out.append_array(s)
+		else:
+			out.append(s)
+	return out
+
+
 ## Parses `text`: {"ast": spell} if it reads as a grammatical spell, else
 ## {"error": why not}, with "unfinished": true if it only needs more words.
 static func parse(text: String) -> Dictionary:
-	var tokens := tokenize(text)
+	var tokens := _plain(tokenize(text))
 	if tokens.is_empty():
 		return {"error": "Type a spell."}
 	var strict := SpellParser.new()
@@ -100,6 +129,7 @@ static func suggest(text: String, limit := 5) -> Array[String]:
 	if not tokens.is_empty() and not text.ends_with(" ") and not text.ends_with("(") \
 			and not text.ends_with("[") and not text.ends_with(","):
 		partial = tokens.pop_back()
+	tokens = _plain(tokens)
 	var p := SpellParser.new()
 	p._tokens = tokens
 	p._spell(0)
@@ -237,6 +267,9 @@ func _spell(i: int) -> Array:
 				for a in _alt_arg(i + 1):
 					for b in _alt_arg(a[1]):
 						out.append_array(_adverbs({"verb": "alternate", "first": a[0], "second": b[0]}, b[1]))
+	if _is(i, "pull"):  # Move ... to Me
+		for n in _object(i + 1):
+			out.append_array(_adverbs({"verb": "move", "what": n[0], "to": {"ref": "me"}}, n[1]))
 	# A noun on its own is a Hold.
 	for n in _noun(i):
 		out.append_array(_adverbs({"verb": "select", "what": n[0]}, n[1]))

@@ -40,6 +40,9 @@ Leave out what a verb acts on and it acts on what the mouse is on (`de` is
 (`mo st` is `Move (Closest Stone) to There`). A slip of one letter (missing,
 extra, wrong or swapped: `mvoe stoen`) is read as the word it nearly is, when
 nothing reads without it; the spell shown under the bar is how it was read.
+Everyday words work too, and "a", "an" and "the" are skipped: `make a fire`,
+`kill the nearest rock`, `grab every rock`, `pull stone` (Move it to Me),
+`put the rock there`.
 While the typed spell reads, the world rings what it would act on right now,
 and a line says how much, or that it would wait.
 While you type, up to five words that could come next are suggested (**Tab**
