@@ -269,6 +269,9 @@ Run the tests with:
 godot --headless --path . --script res://tests/test_spells.gd
 ```
 
+`tests/soak.gd` plays a long random session through the real game (it needs
+a display) to catch runtime errors: `godot --path . --script res://tests/soak.gd`.
+
 ## Decisions made for the prototype
 
 These are open questions in the design doc. The prototype picks a simple

@@ -348,7 +348,10 @@ func _start_turn(sim: Simulation) -> void:
 func targets() -> Array[WorldObject]:
 	match ast["verb"]:
 		"alternate":
-			return _sub.spell.targets() if _sub != null and not _sub.dead else [] as Array[WorldObject]
+			if _sub != null and not _sub.dead:
+				return _sub.spell.targets()
+			var none: Array[WorldObject] = []
+			return none
 		"select":
 			return _alive(current)
 		"create":
