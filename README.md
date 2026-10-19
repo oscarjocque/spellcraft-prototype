@@ -21,6 +21,7 @@ selector are enough to build spells that interact in ways nobody scripted.
 | 1–9, 0 | Pick a spell slot |
 | Left click | Cast the selected spell toward the cursor; while picking This or There, pick |
 | Esc | Cancel a cast that is waiting for picks |
+| Space | Drop one of your attached spells (pick it in a window) |
 | Tab | Open or close the spell editor (pauses the simulation) |
 | R | Reset the sandbox |
 
@@ -120,7 +121,12 @@ while its mana lasts. Every spell attached to you is in your **inventory**,
 listed top right, and **Chosen** lets another spell use one:
 `Destroy Chosen` dispels it, and `Move (Closest Stone) to (Target of Chosen)`
 follows what a held selector picks now. Several spells can use the same held
-noun. A Move whose destination is another spell's target keeps chasing: it
+noun.
+
+**Space** drops one of your attached spells, picked in a window while the
+game keeps running: it stays where it is, stops following you, and leaves
+your inventory. Since it's no longer attached to you, its pickers can pick
+you, and its Here is where you dropped it. A Move whose destination is another spell's target keeps chasing: it
 doesn't end when it arrives or is blocked, and slides around obstacles.
 
 ### Mark

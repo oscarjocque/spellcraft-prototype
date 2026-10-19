@@ -903,6 +903,24 @@ func test_here() -> void:
 	check(made.spell.what.pos.distance_to(made.pos) < 1.0, "A created spell's Here is where it sits")
 
 
+func test_drop() -> void:
+	var w := spell_world()
+	var sim: Simulation = w[0]
+	var p: WorldObject = w[1]
+	var held := sim.cast(p, {"verb": "select", "what": {"closest": "player"}}, Vector2.ZERO)
+	var other := sim.spawn(Materials.make_player(Vector2(900, 360)))
+	sim.step({0: {"drop": held.id}})
+	check(not held in sim.inventory(p) and not held.spell.anchored, "Dropping a spell detaches it")
+	var at := held.pos
+	sim.step({0: {"move": Vector2.DOWN}})
+	sim.step({0: {"move": Vector2.DOWN}})
+	check(held.pos == at and p.pos != at, "A dropped spell stays where it was dropped")
+	check(held.spell.target() == p, "...and, no longer attached to its caster, can pick them")
+	var other_spell := sim.cast(p, {"verb": "select", "what": {"closest": "fire"}}, Vector2.ZERO)
+	sim.step({0: {"drop": other.id}})
+	check(other_spell in sim.inventory(p), "Dropping something that isn't an attached spell does nothing")
+
+
 func test_deterministic() -> void:
 	check(_replay() == _replay(), "Same inputs give the same world")
 

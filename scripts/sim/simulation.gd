@@ -45,7 +45,8 @@ func say(text: String) -> void:
 
 
 ## Advances the world by one tick. `commands` maps a controller slot to
-## {"move": Vector2, "aim": Vector2, "cast": spell} ("cast" is optional).
+## {"move": Vector2, "aim": Vector2, "cast": spell, "drop": spell id} ("cast"
+## and "drop" are optional).
 func step(commands: Dictionary = {}) -> void:
 	tick += 1
 	for o in objects:
@@ -223,8 +224,18 @@ func start_spell(ast: Dictionary, caster: WorldObject, pos: Vector2, fuel: Dicti
 func _control(o: WorldObject, cmd: Dictionary) -> void:
 	var move: Vector2 = cmd.get("move", Vector2.ZERO)
 	o.velocity = move.limit_length(1.0) * PLAYER_SPEED
+	if cmd.has("drop"):
+		drop(o, cmd["drop"])
 	if cmd.has("cast"):
 		cast(o, cmd["cast"], cmd.get("aim", o.pos))
+
+
+## Detaches one of `caster`'s attached spells: it stays where it is, stops
+## following them, and leaves their inventory. Anything else is ignored.
+func drop(caster: WorldObject, id: int) -> void:
+	for o in inventory(caster):
+		if o.id == id:
+			o.spell.anchored = false
 
 
 func _integrate() -> void:

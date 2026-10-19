@@ -15,6 +15,8 @@ var selected := 0
 var _accum := 0.0
 var _pending_cast := {}  # {"ast", "aim"} to send with the next tick's command
 var _casting := {}  # a cast waiting on picks: {"ast", "aim", "nouns", "index"}
+var _dropping := false  # the picker is choosing a spell to drop
+var _pending_drop := 0  # id of a spell to drop with the next tick's command
 
 
 func _ready() -> void:
@@ -22,8 +24,17 @@ func _ready() -> void:
 	_bind("move_right", [KEY_D, KEY_RIGHT])
 	_bind("move_up", [KEY_W, KEY_UP])
 	_bind("move_down", [KEY_S, KEY_DOWN])
-	picker.picked.connect(_on_picked)
-	picker.cancelled.connect(_cancel_cast)
+	picker.picked.connect(func(id: int) -> void:
+		if _dropping:
+			_dropping = false
+			_pending_drop = id
+		else:
+			_on_picked(id))
+	picker.cancelled.connect(func() -> void:
+		if _dropping:
+			_dropping = false
+		else:
+			_cancel_cast())
 	_reset()
 
 
@@ -34,6 +45,8 @@ func _reset() -> void:
 	_accum = 0.0
 	_pending_cast = {}
 	_casting = {}
+	_dropping = false
+	_pending_drop = 0
 	picker.hide()
 
 
@@ -57,6 +70,9 @@ func _command() -> Dictionary:
 		cmd["cast"] = _pending_cast["ast"]
 		cmd["aim"] = _pending_cast["aim"]
 		_pending_cast = {}
+	if _pending_drop != 0:
+		cmd["drop"] = _pending_drop
+		_pending_drop = 0
 	return cmd
 
 
@@ -148,6 +164,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		var slot: int = 9 if event.keycode == KEY_0 else event.keycode - KEY_1
 		if slot >= 0 and slot < mini(slots.size(), 10):
 			selected = slot
+		elif event.keycode == KEY_SPACE and _casting.is_empty() and not picker.visible:
+			_dropping = true
+			picker.ask_drop(sim.inventory(player))
+			get_viewport().set_input_as_handled()
 		elif event.keycode == KEY_R:
 			_reset()
 	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
