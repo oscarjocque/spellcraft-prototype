@@ -359,7 +359,7 @@ func test_create_sustains_its_objects() -> void:
 	var first: WorldObject = host.spell.created[0]
 	run(sim, 15 * Simulation.TICK_RATE)  # past fire's 10 s lifetime
 	check(not first.dead and not host.dead, "Fire doesn't burn out while its Create spell lasts")
-	sim.cast(p, {"verb": "destroy", "what": {"closest": "fire"}}, Vector2.ZERO)
+	sim.cast(p, {"verb": "destroy", "what": {"ref": "this", "id": first.id}}, Vector2.ZERO)
 	run(sim, 4)
 	check(first.dead and not host.dead, "Create keeps going when one of its objects is destroyed")
 
@@ -372,8 +372,10 @@ func test_create_keeps_creating() -> void:
 	run(sim, 5 * Simulation.TICK_RATE)
 	var made := host.spell.created
 	check(made.size() >= 3, "Create builds one object after another")
-	check(made.all(func(o: WorldObject) -> bool: return is_equal_approx(o.pos.y, 360.0)), "Objects form a line toward the aim")
-	check(made[1].pos.x > made[0].pos.x and made[2].pos.x > made[1].pos.x, "Each new object goes past the last")
+	var spot := made[0].pos
+	check(spot.x > p.pos.x and is_equal_approx(spot.y, 360.0), "The first goes right in front of the caster, toward the aim")
+	check(made.all(func(o: WorldObject) -> bool: return o.pos.distance_to(spot) < 4.0 * 22.0 + 1.0),
+		"The rest gather in the closest free spots around it, not in a line")
 	check(is_equal_approx(made[0].radius, 22.0), "Earlier objects are complete")
 	run(sim, 50 * Simulation.TICK_RATE)  # 10 red and 10 green at 0.2/s each last 50 s
 	check(host.dead, "Create ends when its mana runs out")
@@ -411,7 +413,7 @@ func spell_world() -> Array:
 
 
 ## Builds `n` full objects with a Create Wood cast from `p` toward +x.
-func wood_line(sim: Simulation, p: WorldObject, n: int) -> WorldObject:
+func wood_pile(sim: Simulation, p: WorldObject, n: int) -> WorldObject:
 	var maker := sim.cast(p, {"verb": "create", "what": {"material": "wood"}}, p.pos + Vector2(100, 0))
 	var ticks := ceili(Spell.CREATE_TICKS_PER_RADIUS * 22.0)
 	run(sim, n * ticks + 1)
@@ -422,36 +424,40 @@ func test_create_refills_gaps() -> void:
 	var w := spell_world()
 	var sim: Simulation = w[0]
 	var p: WorldObject = w[1]
-	var maker := wood_line(sim, p, 3)
+	var maker := wood_pile(sim, p, 3)
 	var first: WorldObject = maker.spell.created[0]
 	var first_at := first.pos
 	first.dead = true
 	run(sim, ceili(Spell.CREATE_TICKS_PER_RADIUS * 22.0) + 2)
 	var newest: WorldObject = maker.spell.created.back()
-	check(newest.pos.distance_to(first_at) < 0.5, "A gap nearer the caster is filled before going further")
+	check(newest.pos.distance_to(first_at) < 0.5, "The closest spot, once free again, is filled first")
 
 
 func test_create_skips_obstacles() -> void:
 	var w := spell_world()
 	var sim: Simulation = w[0]
 	var p: WorldObject = w[1]
-	# The second place on the line (x = 200 + 44 + 48 = 292) is taken by stone.
-	sim.spawn(Materials.make("stone", Vector2(292, 360)))
-	var maker := wood_line(sim, p, 2)
-	var made := maker.spell.created
-	check(made.size() == 2 and made[1].pos.x > 330, "Create skips a place something else occupies")
+	# The spot Create aims at (x = 200 + 22 + 22 = 244) is taken by stone.
+	var stone := sim.spawn(Materials.make("stone", Vector2(244, 360)))
+	var maker := wood_pile(sim, p, 1)
+	var first: WorldObject = maker.spell.created[0]
+	check(first.pos.distance_to(stone.pos) >= stone.radius + 22.0 - 0.01, "Create doesn't build on something else")
+	check(first.pos.distance_to(Vector2(244, 360)) <= 2.0 * 22.0 + stone.radius, "...but in the closest free spot")
 
 
 func test_create_waits_for_space() -> void:
 	var w := spell_world()
 	var sim: Simulation = w[0]
 	var p: WorldObject = w[1]
-	p.pos = Vector2(1200, 360)  # one place between the caster and the arena's edge
-	var maker := wood_line(sim, p, 4)
-	check(maker.spell.created.size() == 1 and not maker.dead, "With the line full, Create waits instead of piling up")
-	maker.spell.created[0].dead = true
+	# Something huge covers every spot within reach.
+	var blocker := sim.spawn(Materials.make("water", Vector2(600, 360)))  # not solid: pushes nobody
+	blocker.radius = 400.0
+	p.pos = Vector2(600, 360)
+	var maker := wood_pile(sim, p, 2)
+	check(maker.spell.created.is_empty() and not maker.dead, "With no free spot within reach, Create waits")
+	blocker.dead = true
 	run(sim, 2)
-	check(maker.spell.created.size() == 2, "...and builds again once there is space")
+	check(maker.spell.created.size() == 1, "...and builds once there is space")
 
 
 func test_create_spell_refills_gaps() -> void:
@@ -463,7 +469,7 @@ func test_create_spell_refills_gaps() -> void:
 	var first_at := first.pos
 	first.health = 0
 	run(sim, Spell.CREATE_SPELL_TICKS + 1)
-	check(maker.spell.created[1].pos.distance_to(first_at) < 0.5, "A Create Spell line refills a gap too")
+	check(maker.spell.created[1].pos.distance_to(first_at) < 0.5, "A Create Spell refills the closest spot too")
 
 
 func test_create_spell_makes_several() -> void:
@@ -478,7 +484,10 @@ func test_create_spell_makes_several() -> void:
 	run(sim, Simulation.TICK_RATE + 1)
 	var made := maker.spell.created
 	check(made.size() == SpellGrammar.CREATED_SPELLS and maker.dead, "It ends once it has made all of them")
-	check(made[1].pos.x > made[0].pos.x and made[2].pos.x > made[1].pos.x, "They form a line toward the aim")
+	check(made[0].pos.distance_to(made[1].pos) >= Spell.CREATED_SPELL_SPACING / 2.0
+		and made[1].pos.distance_to(made[2].pos) >= Spell.CREATED_SPELL_SPACING / 2.0
+		and made.all(func(o: WorldObject) -> bool: return o.pos.distance_to(made[0].pos) <= Spell.CREATED_SPELL_SPACING + 0.1),
+		"They take separate spots, close together")
 	for o in made:
 		check(not o.dead and o.spell.mana["violet"] > 23.0, "Each created spell got a full share")
 	check(maker.spell.reserve.values().all(func(v: float) -> bool: return v < 0.001), "The whole reserve went to them")
@@ -797,10 +806,9 @@ func test_create_at_aimed_goes_in_front() -> void:
 	run(sim, 4 * Simulation.TICK_RATE)
 	check(wood.dead, "...so fire created at wood sets it burning")
 	var made := host.spell.created
-	check(made.size() > 1 and made.all(func(o: WorldObject) -> bool: return o.pos.x <= first.pos.x and o.pos.x > p.pos.x),
-		"The line grows back toward the caster, and stops at them")
-	run(sim, 20 * Simulation.TICK_RATE)
-	check(made.all(func(o: WorldObject) -> bool: return o.pos.x > p.pos.x), "It never goes past the caster")
+	var reach := Spell.CREATE_SEARCH_RINGS * 14.0 + 0.1
+	var near := func(o: WorldObject) -> bool: return o.pos.distance_to(first.pos) <= reach
+	check(made.size() > 1 and made.all(near), "The rest gather in the closest free spots around it")
 
 
 func test_alternate() -> void:

@@ -3,12 +3,12 @@ extends RefCounted
 ## A cast spell. It lives on its own world object (the host) and performs its
 ## verb every tick until it reaches its goal, runs out of mana, or is destroyed.
 ## A spell with nothing to act on waits, looking again every tick.
-## Create has no goal: it builds one object after another in a line along the
-## direction it was cast, sustaining each finished one (fire doesn't burn out),
-## until its mana runs out. Create Spell likewise makes a line of spells, one
-## every CREATE_SPELL_TICKS, until it has made CREATED_SPELLS of them. Each new
-## one goes in the nearest free place on the line, so gaps get refilled; when
-## the line is full up to the arena's edge, Create waits for space.
+## Create has no goal: it builds one object after another, sustaining each
+## finished one (fire doesn't burn out), until its mana runs out. Create Spell
+## likewise makes spells, one every CREATE_SPELL_TICKS, until it has made
+## CREATED_SPELLS of them. Each new one goes in the free spot closest to where
+## Create aims (see _create_spot), so they gather there and gaps get refilled;
+## with no free spot within reach, Create waits.
 ##
 ## Anchors: every spell a player casts follows them, including a held noun
 ## (Hold), which other spells can use through Chosen. Spells created by other
@@ -23,9 +23,9 @@ extends RefCounted
 ## creates and is handed over as it does. An Alternate pays for its spells.
 
 const CREATE_TICKS_PER_RADIUS := 1.5  # bigger objects take longer to build
-const CREATE_SPACING := 4.0  # gap between objects in a Create line
+const CREATE_SEARCH_RINGS := 6  # how far Create looks for a free spot, in rings
 const CREATE_SPELL_TICKS := Simulation.TICK_RATE  # time between created spells
-const CREATED_SPELL_SPACING := 30.0  # distance between spells in a Create Spell line
+const CREATED_SPELL_SPACING := 30.0  # distance between spells a Create Spell makes
 const DESTROY_RATE := 100.0  # health per second
 const MOVE_SPEED := 140.0  # pixels per second
 const ALTERNATE_TICKS := 3 * Simulation.TICK_RATE  # longest turn in an Alternate
@@ -59,7 +59,7 @@ var _build_step := 0.0
 var _full_radius := 0.0
 var _lifetime := -1  # a created object's full lifetime in ticks, -1 = none
 var _material := ""
-var _edge := 0.0  # distance from the host to where the Create line starts
+var _edge := 0.0  # distance from the host to where Create aims, without "at"
 var _inner := {}  # for Create Spell: the spell it creates
 var _spell_timer := 0
 var _sub: WorldObject  # Alternate: the spell running now
@@ -439,13 +439,12 @@ func _hold(sim: Simulation) -> Array[WorldObject]:
 
 # --- Create ------------------------------------------------------------------
 
-## Where a Create line starts. Without "at": just outside the spell's anchor,
-## growing away from it in the cast direction. With "at": right in front of
-## what it's at (on the caster's side, touching it), or on it if that's a
-## place or a spell, growing back toward the caster. If what it's at is
-## destroyed, the line stays where it was; until the noun names anything,
-## there's nowhere yet.
-func _line_start(sim: Simulation, radius: float) -> Vector2:
+## Where Create aims. Without "at": just outside the spell's anchor, in the
+## cast direction. With "at": right in front of what it's at (on the caster's
+## side, touching it), or on it if that's a place or a spell. If what it's at
+## is destroyed, Create keeps aiming where it was; until the noun names
+## anything, there's nowhere yet.
+func _create_spot(sim: Simulation, radius: float) -> Vector2:
 	if not ast.get("at") is Dictionary:
 		return host.pos + _dir * (_edge + radius)
 	if _state(_at) == "unbound":
@@ -457,19 +456,14 @@ func _line_start(sim: Simulation, radius: float) -> Vector2:
 	return _at_pos
 
 
-## The way a Create line grows: away from the caster, or toward them for "at".
-func _line_dir() -> Vector2:
-	return -_dir if ast.get("at") is Dictionary else _dir
-
-
-## Starts building the next object of a Create line in its nearest free
-## place, or leaves `_building` null if there is none.
+## Starts building the next object in the free spot closest to where Create
+## aims, or leaves `_building` null if there is none.
 func _start_object(sim: Simulation) -> void:
 	_building = null
-	var start := _line_start(sim, _full_radius)
-	if start == Vector2.INF:
+	var spot := _create_spot(sim, _full_radius)
+	if spot == Vector2.INF:
 		return
-	var pos := _free_place(start, 2.0 * _full_radius + CREATE_SPACING, _full_radius,
+	var pos := _closest_free(spot, _full_radius, _full_radius,
 			func(p: Vector2) -> bool: return _is_clear(sim, p, _full_radius))
 	if pos == Vector2.INF:
 		return
@@ -482,17 +476,23 @@ func _start_object(sim: Simulation) -> void:
 	what = _building
 
 
-## The nearest place on the line from `start`, every `step` the way the line
-## grows, that is inside the arena and passes `free`; Vector2.INF if none. A
-## line growing toward the caster stops when it reaches them.
-func _free_place(start: Vector2, step: float, radius: float, free: Callable) -> Vector2:
+## The spot closest to `center` that is inside the arena and passes `free`,
+## trying `center` and then rings `step` apart, up to CREATE_SEARCH_RINGS;
+## within a ring, the side facing the caster first. Vector2.INF if none.
+func _closest_free(center: Vector2, step: float, radius: float, free: Callable) -> Vector2:
 	var arena := Simulation.ARENA.grow(-radius)
-	var toward_caster := ast.get("at") is Dictionary
-	var pos := start
-	while arena.has_point(pos) and not (toward_caster and (pos - host.pos).dot(_dir) < 0.0):
-		if free.call(pos):
-			return pos
-		pos += _line_dir() * step
+	if arena.has_point(center) and free.call(center):
+		return center
+	var facing := (-_dir).angle()
+	for ring in range(1, CREATE_SEARCH_RINGS + 1):
+		var r := ring * step
+		var n := maxi(6, ceili(TAU * r / step))
+		for i in n:
+			# Alternate either side of the caster-facing direction.
+			var angle := facing + ((i + 1) / 2) * (TAU / n) * (1 if i % 2 == 1 else -1)
+			var pos := center + Vector2.from_angle(angle) * r
+			if arena.has_point(pos) and free.call(pos):
+				return pos
 	return Vector2.INF
 
 
@@ -504,15 +504,15 @@ func _is_clear(sim: Simulation, at: Vector2, radius: float) -> bool:
 	return true
 
 
-## Starts the next spell of a Create Spell line in its nearest free place,
-## paid with one share of this spell's reserve. The new spell keeps what it
+## Starts the next spell of a Create Spell in the free spot closest to where
+## it aims, paid with one share of this spell's reserve. The new spell keeps what it
 ## must carry for its own created spells as its reserve, and burns the rest.
 func _create_spell(sim: Simulation) -> void:
-	var start := _line_start(sim, host.radius)
-	if start == Vector2.INF:
+	var spot := _create_spot(sim, host.radius)
+	if spot == Vector2.INF:
 		return
-	# A place is free if none of this spell's living creations sits there.
-	var pos := _free_place(start, CREATED_SPELL_SPACING, host.radius, func(at: Vector2) -> bool:
+	# A spot is free if none of this spell's living creations sits there.
+	var pos := _closest_free(spot, CREATED_SPELL_SPACING, host.radius, func(at: Vector2) -> bool:
 		return created.all(func(o: WorldObject) -> bool:
 			return o.dead or at.distance_to(o.pos) >= CREATED_SPELL_SPACING / 2.0))
 	if pos == Vector2.INF:

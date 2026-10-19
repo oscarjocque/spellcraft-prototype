@@ -34,7 +34,7 @@ diamonds to collect mana.
 | Block family | In the prototype |
 | --- | --- |
 | Verbs | Create, Destroy, Move, Mark, Hold *(a noun on its own)*, Alternate [*spell*] [*spell*] |
-| Create's objects | Fire, Water, Wood, Stone, or Spell [*another spell*]; optionally *at (noun)*: starting right in front of it and growing back toward you |
+| Create's objects | Fire, Water, Wood, Stone, or Spell [*another spell*]; optionally *at (noun)*: right in front of it, then the closest free spots around |
 | Qualifiers | Thing *(any physical object)*, Fire, Water, Wood, Stone, Spell, Player, Mana |
 | Pickers | Closest, Farthest, Random, All |
 | Adjectives | Moving, Burning, Mine, Theirs, Marked |
@@ -135,9 +135,9 @@ Choose **Spell** as Create's object to describe the spell to create (in the
 editor, a nested sentence opens in brackets). Spells nest: the created spell
 can itself be a Create Spell.
 
-- **Create Spell makes 3 spells**, one at once and then one a second, in a
-  line toward where it was cast, then ends. Like Create, it puts each in the
-  nearest free place on the line, refilling the place of a spell that ended.
+- **Create Spell makes 3 spells**, one at once and then one a second, then
+  ends. Like Create, it puts each in the closest free spot to where it aims,
+  refilling the spot of a spell that ended.
 - **The creator carries the mana up front.** Casting a spell that creates
   others takes, besides its own fuel, a *reserve* of one *share* per spell it
   will make. A share is enough to run that spell for 60 s, plus that spell's
@@ -203,7 +203,7 @@ answer for each so it can be playtested. Every value can be tuned through the
 constants at the top of each script.
 
 - **Create places its object in front of the caster**, toward the cursor, so it needs no Where.
-- **Create keeps creating until its mana runs out.** Each object is built in turn in a line toward where it was cast: Create Wood grows a wall, Create Fire lays a trail. Each new object goes in the nearest free place on the line, so a gap (an object destroyed or pushed away) is refilled before the line grows, and anything in the way is skipped. When the line is full up to the arena's edge, Create waits for space. While the spell lasts it sustains everything it made, so fire doesn't burn out. Building takes about 1.5 s for wood and 1 s for fire. Created objects stay after the spell ends, though fire then burns out after 10 s.
+- **Create keeps creating until its mana runs out.** Each new object goes in the free spot closest to where Create aims: just in front of you toward where you cast, or with *at*, right in front of what it's at (on it, for There). Spots are tried outward from there, your side first, so objects gather around that point, and a gap (an object destroyed or pushed away) is refilled first. With no free spot within reach (6 object widths), Create waits. While the spell lasts it sustains everything it made, so fire doesn't burn out. Building takes about 1.5 s for wood and 1 s for fire. Created objects stay after the spell ends, though fire then burns out after 10 s.
 - **Mana storage is a limit per color** (30), and players start full. A cast infuses at most 10 of each color it needs.
 - **Every block drains 0.2 mana per second** of its color, so a typical spell runs for 25–50 s. Colors follow the design doc's first sketch, and Wood, Me, It and Mana have colors assigned here.
 - **Mana can be selected and moved but not created.** Create Mana would produce mana for less than it yields.
