@@ -30,6 +30,9 @@ const BURNING_COLOR := Color("ffb02e")
 
 var sim: Simulation
 var alpha := 1.0  # 0..1 progress from the last tick to the next
+## What a spell being typed would act on (see SpellPreview), and its verb.
+var preview := {}
+var preview_verb := ""
 
 
 func _process(_delta: float) -> void:
@@ -53,6 +56,26 @@ func _draw() -> void:
 			_draw_material(o)
 		if not o.marks.is_empty():
 			draw_circle(_p(o) + Vector2(0, -o.radius - 4), 3.0, MANA_COLOR["violet"])
+	_draw_preview()
+
+
+## Rings around what the spell being typed would act on: pulsing for what
+## the verb acts on, dashed for Move's destination.
+func _draw_preview() -> void:
+	if preview.is_empty():
+		return
+	var color: Color = VERB_COLOR.get(preview_verb, Color.WHITE)
+	var pulse := 0.6 + 0.4 * sin(Time.get_ticks_msec() / 150.0)
+	for o in preview.get("what", []):
+		if not o.dead:
+			draw_arc(_p(o), o.radius + 6, 0, TAU, 32, Color(color, pulse), 3.0)
+	for o in preview.get("to", []):
+		if o.dead:
+			continue
+		var r: float = o.radius + 8
+		for i in 12:
+			var a := TAU * i / 12.0
+			draw_arc(_p(o), r, a, a + TAU / 24.0, 4, Color(color, 0.9), 2.5)
 
 
 func _p(o: WorldObject) -> Vector2:

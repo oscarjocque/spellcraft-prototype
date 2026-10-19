@@ -65,6 +65,14 @@ func _process(delta: float) -> void:
 			sim.step({player.controller: _command()})
 	view.alpha = _accum / Simulation.DT
 	hud.refresh(sim, player, slots, selected, _prompt())
+	view.preview = {}
+	if quick.visible and quick.input.result.has("ast"):
+		var ast: Dictionary = quick.input.result["ast"]
+		view.preview = SpellPreview.targets(sim, player, ast, view.get_global_mouse_position())
+		view.preview_verb = ast["verb"]
+		quick.set_status(SpellPreview.describe(ast, view.preview))
+	elif quick.visible:
+		quick.set_status("")
 	hud.visible_parts(not editor.visible)
 
 

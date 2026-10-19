@@ -1124,6 +1124,27 @@ func test_chip_menus() -> void:
 	check(tried > 200, "(tried %d menu choices)" % tried)
 
 
+func test_preview() -> void:
+	var w := spell_world()
+	var sim: Simulation = w[0]
+	var p: WorldObject = w[1]
+	var near := sim.spawn(Materials.make("stone", Vector2(300, 360)))
+	sim.spawn(Materials.make("stone", Vector2(900, 360)))
+	var dummy := sim.spawn(Materials.make_player(Vector2(600, 600)))
+	var ast: Dictionary = SpellParser.parse("move all stones within 3 of me to closest player")["ast"]
+	var before := sim.objects.size()
+	var found := SpellPreview.targets(sim, p, ast, Vector2(600, 360))
+	check(found["what"] == [near] and found["to"] == [dummy], "The preview finds what the spell would act on")
+	check(sim.objects.size() == before and sim.tick == 0, "...without casting anything")
+	check(SpellPreview.describe(ast, found) == "acts on 1 thing now", "It says how much")
+	var none: Dictionary = SpellParser.parse("destroy closest fire")["ast"]
+	check(SpellPreview.describe(none, SpellPreview.targets(sim, p, none, Vector2.ZERO)).contains("wait"),
+		"...or that the spell would wait")
+	var picked: Dictionary = SpellParser.parse("destroy this")["ast"]
+	check(SpellPreview.describe(picked, SpellPreview.targets(sim, p, picked, Vector2.ZERO)) == "",
+		"...and nothing when it can't know before casting")
+
+
 func test_deterministic() -> void:
 	check(_replay() == _replay(), "Same inputs give the same world")
 

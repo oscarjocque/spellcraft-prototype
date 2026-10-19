@@ -8,6 +8,7 @@ signal cast(ast: Dictionary)
 signal saved(slot: int, ast: Dictionary)
 
 var input: SpellInput
+var _status: Label
 var _history: Array[String] = []
 var _history_at := 0
 
@@ -29,9 +30,19 @@ func _ready() -> void:
 	box.add_child(title)
 	input = SpellInput.new()
 	box.add_child(input)
+	_status = Label.new()
+	_status.add_theme_font_size_override("font_size", 12)
+	_status.add_theme_color_override("font_color", Color("ffb02e"))
+	box.add_child(_status)
 	input.submitted.connect(_on_submitted)
 	input.field.gui_input.connect(_on_key)
 	hide()
+
+
+## A note under the preview, e.g. what the spell would act on now.
+func set_status(text: String) -> void:
+	_status.text = text
+	_status.visible = text != ""
 
 
 func open() -> void:
