@@ -1238,3 +1238,28 @@ func test_quick_cast_keys() -> void:
 	quick._on_key(enter)
 	check(cast.size() == 2 and cast[1] == cast[0], "Enter on the empty bar casts the last spell again")
 	quick.free()
+
+
+func test_cast_flow() -> void:
+	var w := world()
+	var stone := (w[0] as Simulation).spawn(Materials.make("stone", Vector2(300, 300)))
+	var flow := CastFlow.new()
+	flow.begin(SpellParser.parse("create fire")["ast"], Vector2(1, 2), null)
+	check(not flow.busy() and flow.take() == {"ast": {"verb": "create", "what": {"material": "fire"}}, "aim": Vector2(1, 2)},
+		"A spell with nothing to pick is ready at once")
+	check(flow.take().is_empty(), "...once")
+	flow.begin(SpellParser.parse("move this to there")["ast"], Vector2(300, 300), stone)
+	check(flow.picking() == "there" and flow.pick_number() == 2 and flow.pick_count() == 2,
+		"The first This is the thing under the mouse; There is asked for next")
+	flow.begin(SpellParser.parse("destroy fire")["ast"], Vector2.ZERO, null)
+	check(flow.spell()["verb"] == "move", "A second cast waits until the first is picked")
+	flow.pick(Vector2(5, 6))
+	var sent := flow.take()
+	check(sent["ast"]["what"] == {"ref": "this", "id": stone.id} and sent["ast"]["to"] == {"ref": "there", "at": Vector2(5, 6)},
+		"The picks are written into the spell sent")
+	flow.begin(SpellParser.parse("move chosen to there")["ast"], Vector2(7, 8), null)
+	check(flow.picking() == "chosen", "A first Chosen is asked for (only This and There come from the mouse)")
+	flow.cancel()
+	check(not flow.busy() and flow.take().is_empty(), "Cancelling sends nothing")
+	flow.begin(SpellParser.parse("destroy this")["ast"], Vector2.ZERO, null)
+	check(flow.picking() == "this", "With nothing under the mouse, This is asked for")

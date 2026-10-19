@@ -14,9 +14,8 @@ var sim: Simulation
 var player: WorldObject
 var slots: Array = Spellbook.load_slots()  # saved when changed
 var selected := 0  # the slot cast last, highlighted in the HUD
+var flow := CastFlow.new()  # casts being picked for, and ready to send
 var _accum := 0.0
-var _pending_casts := []  # {"ast", "aim"} to send, one per tick, oldest first
-var _casting := {}  # a cast waiting on picks: {"ast", "aim", "nouns", "index"}
 var _dropping := false  # the picker is choosing a spell to drop
 var _pending_drop := 0  # id of a spell to drop with the next tick's command
 
@@ -57,8 +56,7 @@ func _reset() -> void:
 	player = Sandbox.build(sim)
 	view.sim = sim
 	_accum = 0.0
-	_pending_casts.clear()
-	_casting = {}
+	flow = CastFlow.new()
 	_dropping = false
 	_pending_drop = 0
 	picker.hide()
@@ -83,12 +81,21 @@ func _process(delta: float) -> void:
 	elif quick.visible:
 		quick.set_status("")
 	hud.visible_parts(not editor.visible)
-	var under := sim.object_at(view.get_global_mouse_position())
-	var tip := "" if editor.visible or under == null else _describe(under)
-	if _picking() in ["this", "there"]:  # where the eyes are: by the mouse
-		tip = "[color=#ffd34d][b]%s?[/b] click %s · Esc cancels[/color]\n%s" % [_picking().capitalize(),
-				"a place" if _picking() == "there" else "a thing", tip]
-	hud.tooltip(tip, view.get_global_mouse_position())
+	var mouse := view.get_global_mouse_position()
+	var under := sim.object_at(mouse)
+	var spell := view.spell_at(mouse) if under == null else null
+	var tip := ""
+	if editor.visible:
+		pass
+	elif under != null:
+		tip = _describe(under)
+	elif spell != null:
+		tip = _describe_spell(spell)
+	var what := flow.picking()
+	if what in ["this", "there"]:  # where the eyes are: by the mouse
+		tip = "[color=#ffd34d][b]%s?[/b] click %s · Esc cancels[/color]\n%s" % [what.capitalize(),
+				"a place" if what == "there" else "a thing", tip]
+	hud.tooltip(tip, mouse)
 
 
 func _command() -> Dictionary:
@@ -97,92 +104,56 @@ func _command() -> Dictionary:
 		"move": Vector2.ZERO if typing else Input.get_vector("move_left", "move_right", "move_up", "move_down"),
 		"aim": view.get_global_mouse_position(),
 	}
-	if not _pending_casts.is_empty():
-		var next: Dictionary = _pending_casts.pop_front()
+	var next := flow.take()
+	if not next.is_empty():
 		cmd["cast"] = next["ast"]
 		cmd["aim"] = next["aim"]
+		view.flash(player.pos, WorldView.VERB_COLOR.get(next["ast"]["verb"], Color.WHITE))
 	if _pending_drop != 0:
 		cmd["drop"] = _pending_drop
 		_pending_drop = 0
 	return cmd
 
 
-## Casts the selected slot toward `aim`, first having the player pick, one
-## after another and while the game runs, what each Chosen, This and There
-## in it means: Chosen from a window, This and There by clicking the world.
+## Casts the selected slot toward `aim` (see CastFlow for the picks).
 func _begin_cast(aim: Vector2) -> void:
 	_cast(slots[selected], aim, selected)
 
 
 ## Casts `spell` (from slot `slot`, or -1 if typed) toward `aim`, after its picks.
 func _cast(spell: Dictionary, aim: Vector2, slot: int) -> void:
-	if not _casting.is_empty():
+	if flow.busy():
 		return
 	hud.hide_hint()
 	# The spells of the slots an Alternate uses are copied in now, as they are.
-	var ast := SpellGrammar.embed_slots(spell, slots, [slot] if slot >= 0 else [])
-	var nouns := SpellGrammar.cast_picks(ast)
-	_casting = {"ast": ast, "aim": aim, "nouns": nouns, "index": 0}
-	# The first pick can come from where the mouse already is: This is the
-	# object under it, There the spot. The rest are asked for.
-	if not nouns.is_empty():
-		var first: String = nouns[0]["ref"]
-		var under := sim.object_at(aim)
-		if first == "there":
-			_on_picked(aim)
-			return
-		if first == "this" and under != null:
-			_on_picked(under.id)
-			return
-	if nouns.is_empty():
-		_pending_casts.append({"ast": ast, "aim": aim})
-		_casting = {}
-		return
-	_ask_next()
+	flow.begin(SpellGrammar.embed_slots(spell, slots, [slot] if slot >= 0 else []), aim, sim.object_at(aim))
+	_ask_chosen()
 
 
-func _picking() -> String:
-	if _casting.is_empty():
-		return ""
-	return _casting["nouns"][_casting["index"]]["ref"]
+## Opens the window for a Chosen, if that's the pick to make.
+func _ask_chosen() -> void:
+	if flow.picking() == "chosen":
+		picker.ask(SpellGrammar.to_text(flow.spell()), flow.pick_number(), flow.pick_count(), sim.inventory(player))
 
 
-func _ask_next() -> void:
-	if _picking() == "chosen":
-		var nouns: Array = _casting["nouns"]
-		picker.ask(SpellGrammar.to_text(_casting["ast"]), _casting["index"] + 1, nouns.size(), sim.inventory(player))
+func _on_picked(value: Variant) -> void:
+	flow.pick(value)
+	_ask_chosen()
+
+
+func _cancel_cast() -> void:
+	flow.cancel()
+	picker.hide()
 
 
 ## What the HUD should ask for, if anything.
 func _prompt() -> String:
-	var what := _picking()
+	var what := flow.picking()
 	if what == "" or what == "chosen":
 		return ""
-	var nouns: Array = _casting["nouns"]
 	return "%s\n[b][color=#ffd34d]Click %s for %s (%d of %d)[/color][/b] [color=#8a8f98]· Esc cancels[/color]" % [
-		SpellText.bbcode(_casting["ast"]), "a thing" if what == "this" else "a place",
-		what.capitalize(), _casting["index"] + 1, nouns.size()]
-
-
-## Fills in the current pick ("id" for Chosen and This, "at" for There) and
-## moves on to the next, casting once all are picked.
-func _on_picked(value: Variant) -> void:
-	var noun: Dictionary = _casting["nouns"][_casting["index"]]
-	if noun["ref"] == "there":
-		noun["at"] = value
-	else:
-		noun["id"] = value
-	_casting["index"] += 1
-	if _casting["index"] < _casting["nouns"].size():
-		_ask_next()
-	else:
-		_pending_casts.append({"ast": _casting["ast"], "aim": _casting["aim"]})
-		_casting = {}
-
-
-func _cancel_cast() -> void:
-	_casting = {}
-	picker.hide()
+		SpellText.bbcode(flow.spell()), "a thing" if what == "this" else "a place",
+		what.capitalize(), flow.pick_number(), flow.pick_count()]
 
 
 ## The words that describe `o` from the player's side, colored by mana.
@@ -199,6 +170,25 @@ func _describe(o: WorldObject) -> String:
 	if o.health < o.max_health:
 		text += "  [color=#8a8f98]%d/%d[/color]" % [o.health, o.max_health]
 	return "[font_size=13]%s[/font_size]" % text
+
+
+## The words for hovering spell `o`: what it says, how it's doing, its mana.
+func _describe_spell(o: WorldObject) -> String:
+	var s := o.spell
+	var n := s.targets().size()
+	var doing := "acting on %d" % n if n > 0 else "waiting: nothing to act on"
+	if s.paused:
+		doing = "waiting for its turn"
+	elif s.ast["verb"] == "create":
+		doing = "made %d" % s.created.size()
+	var mana: Array[String] = []
+	for c in SpellGrammar.COLORS:
+		if s.mana.get(c, 0.0) > 0.0:
+			mana.append("[color=#%s]%d %s[/color]" % [SpellText.WORD_COLOR[c].to_html(false), ceili(s.mana[c]), c])
+	var fuel := "paid by its Alternate" if s.paid_by_parent else "mana left " + " ".join(mana)
+	var number := sim.inventory(player).find(o)
+	return "[font_size=13]%s%s\n[color=#8a8f98]%s · %s[/color][/font_size]" % [
+		"[b]%d[/b]  " % (number + 1) if number >= 0 else "", SpellText.bbcode(s.ast), doing, fuel]
 
 
 func _input(event: InputEvent) -> void:
@@ -221,7 +211,7 @@ func _input(event: InputEvent) -> void:
 			editor.open(slots, selected)
 		get_viewport().set_input_as_handled()
 	elif event.keycode in [KEY_ENTER, KEY_KP_ENTER] and not editor.visible and not picker.visible \
-			and _casting.is_empty():
+			and not flow.busy():
 		quick.open()
 		get_viewport().set_input_as_handled()
 
@@ -229,7 +219,7 @@ func _input(event: InputEvent) -> void:
 func _unhandled_input(event: InputEvent) -> void:
 	if editor.visible:
 		return
-	if _picking() in ["this", "there"]:
+	if flow.picking() in ["this", "there"]:
 		_handle_world_pick(event)
 		return
 	if quick.visible and event is InputEventMouseButton and event.pressed \
@@ -241,10 +231,10 @@ func _unhandled_input(event: InputEvent) -> void:
 		var slot: int = 9 if event.keycode == KEY_0 else event.keycode - KEY_1
 		if slot >= 0 and slot < mini(slots.size(), 10):
 			# A number key casts its slot toward the mouse right away.
-			if _casting.is_empty() and not picker.visible:
+			if not flow.busy() and not picker.visible:
 				selected = slot
 				_begin_cast(view.get_global_mouse_position())
-		elif event.keycode == KEY_SPACE and _casting.is_empty() and not picker.visible:
+		elif event.keycode == KEY_SPACE and not flow.busy() and not picker.visible:
 			_dropping = true
 			picker.ask_drop(sim.inventory(player))
 			get_viewport().set_input_as_handled()
@@ -260,7 +250,7 @@ func _handle_world_pick(event: InputEvent) -> void:
 		_cancel_cast()
 	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		var at := view.get_global_mouse_position()
-		if _picking() == "there":
+		if flow.picking() == "there":
 			_on_picked(at)
 			return
 		var o := sim.object_at(at)

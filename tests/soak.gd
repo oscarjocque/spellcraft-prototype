@@ -20,9 +20,9 @@ func _process(_d):
 	f += 1
 	var aim := Vector2(rng.randf_range(40, 1240), rng.randf_range(40, 680))
 	# keep any pick moving along
-	if main._picking() in ["this", "there"]:
+	if main.flow.picking() in ["this", "there"]:
 		var o = main.sim.object_at(aim)
-		if main._picking() == "there":
+		if main.flow.picking() == "there":
 			main._on_picked(aim)
 		elif o != null:
 			main._on_picked(o.id)

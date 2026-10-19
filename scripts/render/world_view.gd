@@ -27,6 +27,7 @@ const VERB_COLOR := {
 const PLAYER_COLOR := Color("e8e6df")
 const DUMMY_COLOR := Color("c9a227")
 const BURNING_COLOR := Color("ffb02e")
+const FLASH_MSEC := 350
 
 var sim: Simulation
 var alpha := 1.0  # 0..1 progress from the last tick to the next
@@ -35,6 +36,7 @@ var preview := {}
 var preview_verb := ""
 
 var _spell_at := {}  # spell host -> where it's drawn this frame
+var _flashes := []  # [position, color, msec started]
 
 
 func _process(_delta: float) -> void:
@@ -60,6 +62,20 @@ func _draw() -> void:
 		if not o.marks.is_empty():
 			draw_circle(_p(o) + Vector2(0, -o.radius - 4), 3.0, MANA_COLOR["violet"])
 	_draw_preview()
+	_draw_flashes()
+
+
+## A short ring spreading from `at`, e.g. where a spell was just cast.
+func flash(at: Vector2, color: Color) -> void:
+	_flashes.append([at, color, Time.get_ticks_msec()])
+
+
+func _draw_flashes() -> void:
+	var now := Time.get_ticks_msec()
+	_flashes = _flashes.filter(func(f: Array) -> bool: return now - f[2] < FLASH_MSEC)
+	for f in _flashes:
+		var t: float = (now - f[2]) / float(FLASH_MSEC)
+		draw_arc(f[0], 16.0 + 34.0 * t, 0, TAU, 40, Color(f[1], 1.0 - t), 3.0 * (1.0 - t) + 1.0)
 
 
 ## Rings around what the spell being typed would act on (objects, or places
@@ -130,6 +146,19 @@ func _draw_spell(o: WorldObject) -> void:
 		if dest != null:
 			draw_dashed_line(_p(target), _p(dest), Color(color, 0.5), 1.5, 6.0)
 	_draw_diamond(p, o.radius + 2, color)
+
+
+## The spell drawn at `at` (as placed this frame), or null.
+func spell_at(at: Vector2) -> WorldObject:
+	var best: WorldObject = null
+	var best_d := INF
+	for o in sim.objects:
+		if o.spell != null and not o.dead:
+			var d := at.distance_to(_spell_at.get(o, _p(o)))
+			if d <= o.radius + 6.0 and d < best_d:
+				best = o
+				best_d = d
+	return best
 
 
 ## Where each spell is drawn: spells attached to a player in a ring around

@@ -261,6 +261,8 @@ scripts/
   ui/hud.gd, ui/spell_editor.gd (the spellbook), ui/spell_chips.gd (clickable
   words), ui/spell_input.gd + ui/quick_cast.gd (typing), ui/spell_text.gd
   sandbox.gd       test arena and preset spells
+  spellbook.gd     saves and loads the ten slots
+  cast_flow.gd     a cast's picks (Chosen, This, There), then the queue to send
   main.gd          runs the tick loop and turns local input into commands
 tests/test_spells.gd   headless tests for every prototype spell and rule
 ```
