@@ -18,8 +18,8 @@ selector are enough to build spells that interact in ways nobody scripted.
 | Input | Action |
 | --- | --- |
 | WASD / arrows | Move |
-| 1–9, 0 | Pick a spell slot |
-| Left click | Cast the selected spell toward the cursor; while picking This or There, pick |
+| 1–9, 0 | Cast that slot's spell toward the mouse |
+| Left click | While picking This or There, pick |
 | Esc | Cancel a cast that is waiting for picks |
 | Space | Drop one of your attached spells (pick it in a window) |
 | Tab | Open or close the spell editor (pauses the simulation) |

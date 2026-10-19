@@ -11,7 +11,7 @@ extends Node2D
 var sim: Simulation
 var player: WorldObject
 var slots: Array = Sandbox.PRESETS.duplicate(true)
-var selected := 0
+var selected := 0  # the slot cast last, highlighted in the HUD
 var _accum := 0.0
 var _pending_cast := {}  # {"ast", "aim"} to send with the next tick's command
 var _casting := {}  # a cast waiting on picks: {"ast", "aim", "nouns", "index"}
@@ -164,16 +164,16 @@ func _unhandled_input(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and not event.echo:
 		var slot: int = 9 if event.keycode == KEY_0 else event.keycode - KEY_1
 		if slot >= 0 and slot < mini(slots.size(), 10):
-			selected = slot
+			# A number key casts its slot toward the mouse right away.
+			if _casting.is_empty() and not picker.visible:
+				selected = slot
+				_begin_cast(view.get_global_mouse_position())
 		elif event.keycode == KEY_SPACE and _casting.is_empty() and not picker.visible:
 			_dropping = true
 			picker.ask_drop(sim.inventory(player))
 			get_viewport().set_input_as_handled()
 		elif event.keycode == KEY_R:
 			_reset()
-	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
-		if _casting.is_empty():
-			_begin_cast(view.get_global_mouse_position())
 
 
 ## While picking This or There: a click picks, Esc cancels the cast.
