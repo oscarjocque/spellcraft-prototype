@@ -12,7 +12,7 @@ const PRESETS := [
 	{"verb": "move", "what": {"closest": "stone"}, "to": {"ref": "me"}},  # Pull
 	{"verb": "move", "what": {"closest": "stone"}, "to": {"closest": "player"}},  # Boulder throw
 	{"verb": "select", "what": {"closest": "player"}},  # Live tracker, part 1: hold a selector
-	{"verb": "move", "what": {"closest": "stone"}, "to": {"target_of": {"ref": "chosen"}}},  # Live tracker, part 2
+	{"verb": "move", "what": {"closest": "stone"}, "to": {"target_of": {"ref": "this"}}},  # Live tracker, part 2
 	{"verb": "create", "what": {"spell": {"verb": "destroy", "what": {"closest": "fire"}}}},  # Fire warden
 	{"verb": "move", "what": {"ref": "this"}, "to": {"ref": "there"}},  # Telekinesis
 ]

@@ -164,8 +164,8 @@ func owner_of(o: WorldObject) -> WorldObject:
 	return null
 
 
-## The Thing or mana under `at` (spells are picked with Chosen), or null:
-## what This means when picked by pointing.
+## The Thing or mana under `at`, or null: what This means when picked by
+## pointing, unless a spell's diamond is there (the view knows where those are).
 func object_at(at: Vector2) -> WorldObject:
 	var best: WorldObject = null
 	for o in objects:

@@ -12,14 +12,15 @@ extends RefCounted
 ##   {"verb": "alternate", "first": ARG, "second": ARG}
 ##     ARG is {"slot": N}, one of the caster's spell slots (0-based), which is
 ##     copied in as "spell" when casting (see embed_slots); or {"ref":
-##     "chosen"}, an attached spell, picked when casting, that it takes over.
+##     "this"}, one of the caster's attached spells, picked when casting,
+##     that it takes over.
 ##
 ## Any spell may also have adverbs: {"adverbs": {ADVERB: VALUE}}. So far:
 ##   "up_to": N   at most N: created, spells created, destroyed, moved,
 ##                marked, held, or turns of an Alternate
 ##
 ## NOUN is one of:
-##   {"ref": REF}                 Me, Here, It, Chosen, This, There, Aimed, Self
+##   {"ref": REF}                 Me, Here, It, This, There, Aimed, Self
 ##   {PICKER: QUALIFIER, "adj": [ADJECTIVE...]?, "within": METERS?, "from": NOUN?}
 ##                                e.g. (Closest Moving Stone within 3 m of There)
 ##   {RELATION: NOUN}             (Target of X), (Caster of X), ...
@@ -27,11 +28,13 @@ extends RefCounted
 ## Here is the spell's own location (the caster's, for a spell they cast);
 ## Self is the spell itself, as an object it can act on.
 ## It is what the other spell of an Alternate acted on in its last turn (and
-## nothing outside an Alternate). Chosen, This and There are picked by the caster for each use when casting,
-## and the pick is stored in the noun: "id" for Chosen and This, "at" for There.
+## nothing outside an Alternate). This (any object or spell, in the world or
+## attached to the caster) and There (a spot) are picked by the caster for
+## each use when casting, and the pick is stored in the noun: "id" for This,
+## "at" for There.
 ## A picker inside a spell chooses once, when the spell is cast; a held one
-## keeps choosing. Relations are re-read every tick, so (Target of Chosen),
-## with a held noun chosen, follows whatever it holds now.
+## keeps choosing. Relations are re-read every tick, so (Target of This),
+## with a held noun picked, follows whatever it holds now.
 ## Every word costs mana of one color: the words that change the world (verbs,
 ## and what Create makes) the full rate, the words that only say what or
 ## where a quarter of it. A created spell pays its own drain:
@@ -40,9 +43,9 @@ extends RefCounted
 const VERBS := ["create", "destroy", "move", "mark", "select", "alternate"]
 const MATERIALS := ["fire", "water", "wood", "stone"]
 const QUALIFIERS := ["thing", "fire", "water", "wood", "stone", "spell", "player", "mana"]
-const REFS := ["me", "here", "it", "chosen", "this", "there", "aimed", "self"]
+const REFS := ["me", "here", "it", "this", "there", "aimed", "self"]
 ## Refs the caster picks when casting.
-const PICKED_REFS := ["chosen", "this", "there"]
+const PICKED_REFS := ["this", "there"]
 const PICKERS := ["closest", "farthest", "random", "all"]
 const ADJECTIVES := ["moving", "burning", "mine", "theirs", "marked"]
 const RELATIONS := ["target_of", "caster_of", "maker_of", "products_of"]
@@ -62,7 +65,7 @@ const BLOCK_COLOR := {
 	"there": "green", "here": "green", "aimed": "green", "within": "green", "from": "green", "away": "green",
 	"destroy": "violet", "mark": "violet", "alternate": "violet", "it": "violet", "spell": "violet", "player": "violet", "thing": "violet",
 	"closest": "violet", "farthest": "violet", "random": "violet", "all": "violet",
-	"me": "violet", "chosen": "violet", "this": "violet", "self": "violet",
+	"me": "violet", "this": "violet", "self": "violet",
 	"mine": "violet", "theirs": "violet", "marked": "violet",
 	"target_of": "violet", "caster_of": "violet", "maker_of": "violet", "products_of": "violet",
 }
@@ -330,7 +333,7 @@ static func validate(ast: Dictionary, need_slots := true) -> String:
 				var arg: Variant = ast.get(key)
 				if not arg is Dictionary:
 					return "Alternate needs two spells."
-				if arg.get("ref", "") == "chosen":
+				if arg.get("ref", "") == "this":
 					continue
 				if not arg.has("slot") or not arg["slot"] is int or arg["slot"] < 0 or arg["slot"] > 9:
 					return "Alternate takes a spell slot or an attached spell."
@@ -364,7 +367,7 @@ static func _valid_noun(noun: Variant) -> bool:
 	return not noun.has("from") or _valid_noun(noun["from"])
 
 
-## Every noun the caster picks when casting (Chosen, This, There), including
+## Every noun the caster picks when casting (This, There), including
 ## those in the spells it creates, in reading order: the order they're asked.
 static func cast_picks(ast: Dictionary) -> Array[Dictionary]:
 	var out: Array[Dictionary] = []
@@ -376,7 +379,7 @@ static func cast_picks(ast: Dictionary) -> Array[Dictionary]:
 			_picks_in(held_noun(ast), out)
 		"alternate":
 			for arg in [ast["first"], ast["second"]]:
-				if arg.get("ref", "") == "chosen":
+				if arg.get("ref", "") == "this":
 					out.append(arg)
 				elif not arg_spell(arg).is_empty():
 					out.append_array(cast_picks(arg_spell(arg)))
@@ -463,7 +466,7 @@ static func _sentence_segments(ast: Dictionary, out: Array) -> void:
 				elif arg.has("slot"):
 					out.append(["spell %d" % ((arg["slot"] + 1) % 10), ""])
 				else:
-					out.append(["Chosen", "chosen"])
+					out.append(["This", "this"])
 				out.append(["]", ""])
 		_:
 			out.append(["?", ""])

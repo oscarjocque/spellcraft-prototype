@@ -2,8 +2,8 @@ class_name SpellPreview
 extends RefCounted
 ## What a spell would act on if cast now, worked out without casting it, so
 ## the world can highlight it while the spell is being typed. The first This
-## or There is where the mouse is, as when cast; other picks (Chosen, a later
-## This or There), It and relations are only known once cast. Random shows
+## or There is where the mouse is, as when cast; later picks, It and
+## relations are only known once cast. Random shows
 ## every candidate. Reads the simulation; never changes it.
 
 
@@ -11,11 +11,14 @@ extends RefCounted
 ## Move's destination}: each an Array of objects and places (Vector2), or
 ## null if it can't be known before casting. `aim` is where the mouse is;
 ## `mouse_picks` false if it isn't over the world (so no This or There).
+## `under` is what This would pick at the mouse, if not the thing there (a
+## spell's diamond, which only the view can place).
 static func targets(sim: Simulation, caster: WorldObject, ast: Dictionary, aim: Vector2,
-		mouse_picks := true) -> Dictionary:
+		mouse_picks := true, under: WorldObject = null) -> Dictionary:
 	var picks := SpellGrammar.cast_picks(ast)
 	var first: Dictionary = picks[0] if mouse_picks and not picks.is_empty() else {}
-	var ctx := {"sim": sim, "caster": caster, "aim": aim, "first": first}
+	var ctx := {"sim": sim, "caster": caster, "aim": aim, "first": first,
+		"under": under if under != null else sim.object_at(aim)}
 	var limit := SpellGrammar.up_to(ast)
 	var out := {"what": null, "to": null}
 	match ast.get("verb", ""):
@@ -44,7 +47,7 @@ static func _noun(ctx: Dictionary, noun: Dictionary) -> Variant:
 				var o := sim.aimed(caster.pos, dir if dir != Vector2.ZERO else Vector2.RIGHT, [caster])
 				return [o] if o != null else []
 			"this" when first:
-				var o := sim.object_at(ctx["aim"])
+				var o: WorldObject = ctx["under"]
 				return [o] if o != null else null  # nothing under the mouse: it asks
 			"there" when first:
 				return [ctx["aim"]]

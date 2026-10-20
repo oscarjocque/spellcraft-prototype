@@ -7,9 +7,9 @@ var main
 var f := 0
 var rng := RandomNumberGenerator.new()
 const TYPED := ["mo st me", "destroy all fires within 3 of here, up to 2", "create fire at there",
-	"move this to there", "mark all moving stones", "closest player", "move stone to target of chosen",
-	"create spell [destroy fire]", "alternate 5 chosen", "create wood at aimed", "hold all things within 2 of me",
-	"destroy products of chosen", "move all players to farthest stone", "mark random burning thing",
+	"move this to there", "mark all moving stones", "closest player", "move stone to target of this",
+	"create spell [destroy fire]", "alternate 5 this", "create wood at aimed", "hold all things within 2 of me",
+	"destroy products of this", "move all players to farthest stone", "mark random burning thing",
 	"de", "mo st", "mvoe stoen to me", "hold", "create fire at there", "move to me",
 	"kill the nearest rock", "pull stone", "make a fire", "tag everything within 3 of me",
 	"push stone", "move all logs within 3 of there away from there", "move self to there", "destroy self"]
@@ -23,7 +23,7 @@ func _process(_d):
 	var aim := Vector2(rng.randf_range(40, 1240), rng.randf_range(40, 680))
 	# keep any pick moving along
 	if main.flow.picking() in ["this", "there"]:
-		var o = main.sim.object_at(aim)
+		var o = main._under(aim)  # a thing or a spell
 		if main.flow.picking() == "there":
 			main._on_picked(aim)
 		elif o != null:

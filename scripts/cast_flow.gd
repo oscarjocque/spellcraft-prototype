@@ -1,11 +1,11 @@
 class_name CastFlow
 extends RefCounted
 ## A cast on its way to the simulation. First the player picks, one after
-## another and while the game runs, what each Chosen, This and There in the
-## spell means, in reading order: Chosen from a window, This and There by
-## clicking the world, except that the first This or There is where the mouse
-## already is. Then the spell waits to go out with a tick's command, one per
-## tick, oldest first.
+## another and while the game runs, what each This and There in the spell
+## means, in reading order, by clicking the world (This: a thing or a spell,
+## or an attached spell by its number), except that the first This or There
+## is where the mouse already is. Then the spell waits to go out with a
+## tick's command, one per tick, oldest first.
 
 var _casting := {}  # waiting on picks: {"ast", "aim", "nouns", "index"}
 var _ready_casts := []  # {"ast", "aim"}, picked and waiting to be sent
@@ -32,7 +32,7 @@ func busy() -> bool:
 	return not _casting.is_empty()
 
 
-## What the current pick is for: "chosen", "this", "there", or "" if none.
+## What the current pick is for: "this", "there", or "" if none.
 func picking() -> String:
 	if not busy() or _casting["index"] >= _casting["nouns"].size():
 		return ""
@@ -52,7 +52,7 @@ func pick_count() -> int:
 	return _casting["nouns"].size() if busy() else 0
 
 
-## Fills in the current pick (a spell's or thing's id for Chosen and This, a
+## Fills in the current pick (a thing's or spell's id for This, a
 ## position for There) and moves on to the next, finishing after the last.
 func pick(value: Variant) -> void:
 	var noun: Dictionary = _casting["nouns"][_casting["index"]]

@@ -4,7 +4,7 @@
 [ext_resource type="Script" path="res://scripts/render/world_view.gd" id="2_view"]
 [ext_resource type="Script" path="res://scripts/ui/hud.gd" id="3_hud"]
 [ext_resource type="Script" path="res://scripts/ui/spell_editor.gd" id="4_editor"]
-[ext_resource type="Script" path="res://scripts/ui/chosen_picker.gd" id="5_picker"]
+[ext_resource type="Script" path="res://scripts/ui/spell_picker.gd" id="5_picker"]
 [ext_resource type="Script" path="res://scripts/ui/quick_cast.gd" id="6_quick"]
 [ext_resource type="Script" path="res://scripts/ui/word_sheet.gd" id="7_words"]
 
@@ -21,7 +21,7 @@ script = ExtResource("3_hud")
 visible = false
 script = ExtResource("4_editor")
 
-[node name="ChosenPicker" type="PanelContainer" parent="Hud"]
+[node name="SpellPicker" type="PanelContainer" parent="Hud"]
 visible = false
 script = ExtResource("5_picker")
 

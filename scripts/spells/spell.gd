@@ -11,7 +11,7 @@ extends RefCounted
 ## with no free spot within reach, Create waits.
 ##
 ## Anchors: every spell a player casts follows them, including a held noun
-## (Hold), which other spells can use through Chosen. Spells created by other
+## (Hold), which other spells can use through This. Spells created by other
 ## spells stay at their own point.
 ##
 ## Alternate runs its two spells attached to itself, one at a time: a spell
@@ -129,7 +129,7 @@ func on_cast(sim: Simulation, aim: Vector2) -> void:
 		"alternate":
 			for i in 2:
 				var arg: Dictionary = ast["first" if i == 0 else "second"]
-				if arg.get("ref", "") == "chosen":
+				if arg.get("ref", "") == "this":
 					_taken[i] = _take(sim, arg.get("id", 0))
 			_turn = 1  # so the first turn tried is the first spell's
 			_next_turn(sim)
@@ -486,14 +486,11 @@ func _resolve_ref(noun: Dictionary, sim: Simulation) -> WorldObject:
 			return caster
 		"here", "self":
 			return host  # the spell's own world object: where it is, and itself
-		"chosen":
-			# Only a spell really in the caster's inventory counts.
-			for o in sim.inventory(caster):
-				if o.id == noun.get("id", 0) and o != host:
-					return o
 		"this":
+			# Any object or spell, in the world or attached to anyone, but not
+			# this spell itself (that's Self).
 			var o := sim.find(noun.get("id", 0))
-			if o != null and o.spell == null:
+			if o != null and o != host:
 				return o
 		"there":
 			var at: Variant = noun.get("at")

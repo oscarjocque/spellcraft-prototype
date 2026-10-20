@@ -10,7 +10,7 @@ extends RefCounted
 ##   2 Clear the ring  pickers and away from:  Move (All Wood within 3 m of There) away from There
 ##   3 Firebreak      keep a house alive while fires creep in from all sides:
 ##                    a live tracker (Hold (All Fire), then Destroy (Target of
-##                    Chosen)) does it in two casts; Destroy Fire by hand takes
+##                    This)) does it in two casts; Destroy Fire by hand takes
 ##                    one every couple of seconds.
 ##   4 Only green     the pad again, with only green mana: Closest, This and
 ##                    Me are violet. Move Aimed to There is all green, so line
@@ -34,7 +34,7 @@ const GOALS := [
 	"Try anything. F2 goes to the levels.",
 	"Get a stone onto the gold pad.  Hint: move stone to there, and click the pad.",
 	"Get every log out of the gold ring.  Hint: Move … away from …, and All … within 3 m of There.",
-	"Keep 2 of the house's 3 logs for 40 s; fires creep in from every side.  Hint: a held All keeps re-reading; Target of Chosen follows it.",
+	"Keep 2 of the house's 3 logs for 40 s; fires creep in from every side.  Hint: a held All keeps re-reading; Target of This follows it.",
 	"Get the stone onto the pad, with only green mana. F1 shows which words are green; Aimed is the first thing toward the mouse.",
 	"Burn down the barricade behind the wall. There's no violet mana, so no Destroy.",
 	"Put out the three bonfires. Water puts out fire; red and blue mana lie beyond the wall, and mana passes through stone.",

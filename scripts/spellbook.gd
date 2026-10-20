@@ -15,7 +15,8 @@ static func load_slots(from := "") -> Array:
 	var slots: Array = Sandbox.PRESETS.duplicate(true)
 	if not FileAccess.file_exists(file_path):
 		return slots
-	var saved: Variant = str_to_var(FileAccess.get_file_as_string(file_path))
+	# Chosen was merged into This: older spellbooks say "chosen".
+	var saved: Variant = str_to_var(FileAccess.get_file_as_string(file_path).replace('"chosen"', '"this"'))
 	if not saved is Array:
 		return slots
 	for i in mini(saved.size(), slots.size()):

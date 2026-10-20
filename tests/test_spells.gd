@@ -155,7 +155,7 @@ func test_held_selector_tracks() -> void:
 	var b := sim.spawn(Materials.make_player(Vector2(900, 650)))
 	var selector := sim.cast(p, {"verb": "select", "qualifier": "player"}, Vector2(900, 100))
 	check(selector.spell.anchored and selector.pos == p.pos, "A bare selector stays attached to its caster")
-	var mover := sim.cast(p, with_chosen({"verb": "move", "what": {"closest": "stone"}, "to": {"target_of": {"ref": "chosen"}}}, [selector.id]), Vector2.ZERO)
+	var mover := sim.cast(p, with_picks({"verb": "move", "what": {"closest": "stone"}, "to": {"target_of": {"ref": "this"}}}, [selector.id]), Vector2.ZERO)
 	plenty_of_fuel(mover)  # this is about tracking, not what pushing a stone costs
 	run(sim, 10)
 	check(selector.spell.target() == a, "Held selector picks the player nearest its caster, never the caster")
@@ -186,7 +186,7 @@ func test_tracking_gets_around_stone() -> void:
 	sim.spawn(Materials.make("stone", Vector2(600, 362)))  # in the way
 	var target := sim.spawn(Materials.make_player(Vector2(900, 360)))
 	var selector := sim.cast(p, {"verb": "select", "qualifier": "player"}, Vector2.ZERO)
-	var mover := sim.cast(p, with_chosen({"verb": "move", "what": {"closest": "stone"}, "to": {"target_of": {"ref": "chosen"}}}, [selector.id]), Vector2.ZERO)
+	var mover := sim.cast(p, with_picks({"verb": "move", "what": {"closest": "stone"}, "to": {"target_of": {"ref": "this"}}}, [selector.id]), Vector2.ZERO)
 	plenty_of_fuel(mover)  # this is about tracking, not what pushing a stone costs
 	run(sim, 8 * Simulation.TICK_RATE)
 	check(not mover.dead, "A chase doesn't end when stone blocks it")
@@ -202,10 +202,10 @@ func test_held_noun_is_shared() -> void:
 	var dummy := sim.spawn(Materials.make_player(Vector2(900, 360)))
 	var selector := sim.cast(p, {"verb": "select", "what": {"closest": "player"}}, Vector2.ZERO)
 	check(SpellGrammar.to_text(selector.spell.ast) == "Hold (Closest Player).", "A held noun reads as Hold")
-	var first := sim.cast(p, with_chosen({"verb": "move", "what": {"closest": "stone"}, "to": {"target_of": {"ref": "chosen"}}}, [selector.id]), Vector2.ZERO)
-	var second := sim.cast(p, with_chosen({"verb": "move", "what": {"closest": "stone"}, "to": {"target_of": {"ref": "chosen"}}}, [selector.id]), Vector2.ZERO)
+	var first := sim.cast(p, with_picks({"verb": "move", "what": {"closest": "stone"}, "to": {"target_of": {"ref": "this"}}}, [selector.id]), Vector2.ZERO)
+	var second := sim.cast(p, with_picks({"verb": "move", "what": {"closest": "stone"}, "to": {"target_of": {"ref": "this"}}}, [selector.id]), Vector2.ZERO)
 	check(first.spell.destination() == dummy and second.spell.destination() == dummy,
-		"Several spells can follow one held selector through Chosen")
+		"Several spells can follow one held selector through This")
 	check(selector in sim.inventory(p), "Using a held noun doesn't take it out of the inventory")
 
 
@@ -220,7 +220,7 @@ func test_destroying_selector_cuts_off_spell() -> void:
 	sim.spawn(Materials.make("stone", Vector2(300, 600)))
 	sim.spawn(Materials.make_player(Vector2(900, 150)))
 	var selector := sim.cast(p, {"verb": "select", "qualifier": "player"}, Vector2(900, 100))
-	var mover := sim.cast(p, with_chosen({"verb": "move", "what": {"closest": "stone"}, "to": {"target_of": {"ref": "chosen"}}}, [selector.id]), Vector2.ZERO)
+	var mover := sim.cast(p, with_picks({"verb": "move", "what": {"closest": "stone"}, "to": {"target_of": {"ref": "this"}}}, [selector.id]), Vector2.ZERO)
 	plenty_of_fuel(mover)  # this is about tracking, not what pushing a stone costs
 	run(sim, 3)
 	selector.health = 0
@@ -407,11 +407,11 @@ func test_spells_last_longer() -> void:
 	check(host.dead, "...and ends when its mana runs out, at 100 s")
 
 
-const DESTROY_CHOSEN := {"verb": "destroy", "what": {"ref": "chosen"}}
+const DESTROY_THIS := {"verb": "destroy", "what": {"ref": "this"}}
 
 
-## A copy of `ast` with the Chosen picks filled in, as the pick windows do.
-func with_chosen(ast: Dictionary, ids: Array) -> Dictionary:
+## A copy of `ast` with its This picks filled in, as clicking does.
+func with_picks(ast: Dictionary, ids: Array) -> Dictionary:
 	var copy := ast.duplicate(true)
 	var nouns := SpellGrammar.cast_picks(copy)
 	for i in nouns.size():
@@ -535,25 +535,29 @@ func test_inventory() -> void:
 	check(not created in sim.inventory(p), "A spell created by a spell isn't attached, so isn't in the inventory")
 
 
-func test_chosen_noun() -> void:
+func test_this_picks_spells_too() -> void:
 	var w := spell_world()
 	var sim: Simulation = w[0]
 	var p: WorldObject = w[1]
 	var selector := sim.cast(p, {"verb": "select", "qualifier": "player"}, Vector2.ZERO)
 	var fire := sim.cast(p, {"verb": "create", "what": {"material": "fire"}}, Vector2(400, 360))
-	sim.cast(p, with_chosen(DESTROY_CHOSEN, [selector.id]), Vector2.ZERO)
+	sim.cast(p, with_picks(DESTROY_THIS, [selector.id]), Vector2.ZERO)
 	run(sim, 4)
-	check(selector.dead and not fire.dead, "Destroy Chosen destroys the chosen spell, and only it")
-	check(SpellGrammar.to_text(DESTROY_CHOSEN) == "Destroy Chosen.", "Chosen reads as a noun")
+	check(selector.dead and not fire.dead, "Destroy This, picking an attached spell, destroys it and only it")
+	check(SpellGrammar.to_text(DESTROY_THIS) == "Destroy This.", "This reads as a noun")
 
+	var loose := sim.cast(p, {"verb": "select", "qualifier": "player"}, Vector2.ZERO)
+	sim.drop(p, loose.id)
+	sim.cast(p, with_picks(DESTROY_THIS, [loose.id]), Vector2.ZERO)
+	run(sim, 4)
+	check(loose.dead, "...and a spell loose in the world too")
 	var dummy := sim.spawn(Materials.make_player(Vector2(900, 360)))
-	var stray := sim.cast(p, with_chosen(DESTROY_CHOSEN, [dummy.id]), Vector2.ZERO)
+	var hit := sim.cast(p, with_picks(DESTROY_THIS, [dummy.id]), Vector2.ZERO)
+	run(sim, 2)
+	check(hit.spell.target() == dummy, "...as well as things")
+	var nothing := sim.cast(p, with_picks(DESTROY_THIS, [0]), Vector2.ZERO)
 	run(sim, 5)
-	check(stray.spell.target() == null and dummy.health == dummy.max_health,
-		"Chosen only accepts a spell in the caster's inventory")
-	var nothing := sim.cast(p, with_chosen(DESTROY_CHOSEN, [0]), Vector2.ZERO)
-	run(sim, 5)
-	check(not nothing.dead and nothing.spell.target() == null, "With nothing chosen, the spell waits")
+	check(not nothing.dead and nothing.spell.target() == null, "With nothing picked, the spell waits")
 
 
 func test_each_chosen_is_picked_separately() -> void:
@@ -563,13 +567,13 @@ func test_each_chosen_is_picked_separately() -> void:
 	var stone := sim.spawn(Materials.make("stone", Vector2(500, 600)))
 	var pull := sim.cast(p, {"verb": "move", "what": {"closest": "stone"}, "to": {"ref": "me"}}, Vector2.ZERO)
 	var fire := sim.cast(p, {"verb": "create", "what": {"material": "fire"}}, Vector2(400, 360))
-	var ast := {"verb": "move", "what": {"target_of": {"ref": "chosen"}}, "to": {"target_of": {"ref": "chosen"}}}
-	check(SpellGrammar.cast_picks(ast).size() == 2, "Each Chosen in a spell is picked separately")
-	var both := sim.cast(p, with_chosen(ast, [pull.id, fire.id]), Vector2.ZERO)
+	var ast := {"verb": "move", "what": {"target_of": {"ref": "this"}}, "to": {"target_of": {"ref": "this"}}}
+	check(SpellGrammar.cast_picks(ast).size() == 2, "Each This in a spell is picked separately")
+	var both := sim.cast(p, with_picks(ast, [pull.id, fire.id]), Vector2.ZERO)
 	check(both.spell.target() == stone and both.spell.destination() == fire.spell.what,
-		"Each Chosen means the spell picked for it")
-	var nested := {"verb": "create", "what": {"spell": DESTROY_CHOSEN}}
-	check(SpellGrammar.cast_picks(nested).size() == 1, "A created spell's Chosen is picked when casting its creator")
+		"Each This means the spell picked for it")
+	var nested := {"verb": "create", "what": {"spell": DESTROY_THIS}}
+	check(SpellGrammar.cast_picks(nested).size() == 1, "A created spell's This is picked when casting its creator")
 
 
 func test_target_of_selector() -> void:
@@ -580,9 +584,9 @@ func test_target_of_selector() -> void:
 	var a := sim.spawn(Materials.make_player(Vector2(900, 150)))
 	var b := sim.spawn(Materials.make_player(Vector2(900, 650)))
 	var selector := sim.cast(p, {"verb": "select", "qualifier": "player"}, Vector2.ZERO)
-	var ast := {"verb": "move", "what": {"closest": "stone"}, "to": {"target_of": {"ref": "chosen"}}}
-	check(SpellGrammar.to_text(ast) == "Move (Closest Stone) to (Target of Chosen).", "Target of reads as a noun")
-	var mover := sim.cast(p, with_chosen(ast, [selector.id]), Vector2.ZERO)
+	var ast := {"verb": "move", "what": {"closest": "stone"}, "to": {"target_of": {"ref": "this"}}}
+	check(SpellGrammar.to_text(ast) == "Move (Closest Stone) to (Target of This).", "Target of reads as a noun")
+	var mover := sim.cast(p, with_picks(ast, [selector.id]), Vector2.ZERO)
 	run(sim, 4)
 	check(mover.spell.destination() == a and heading(stone).dot(stone.pos.direction_to(a.pos)) > 0.95,
 		"Target of a selector is its pick")
@@ -598,7 +602,7 @@ func test_target_of_move() -> void:
 	var p: WorldObject = w[1]
 	var stone := sim.spawn(Materials.make("stone", Vector2(700, 360)))
 	var pull := sim.cast(p, {"verb": "move", "what": {"closest": "stone"}, "to": {"ref": "me"}}, Vector2.ZERO)
-	sim.cast(p, with_chosen({"verb": "destroy", "what": {"target_of": {"ref": "chosen"}}}, [pull.id]), Vector2.ZERO)
+	sim.cast(p, with_picks({"verb": "destroy", "what": {"target_of": {"ref": "this"}}}, [pull.id]), Vector2.ZERO)
 	run(sim, 2 * Simulation.TICK_RATE)
 	check(stone.dead, "Target of a Move is the object it moves")
 
@@ -610,14 +614,14 @@ func test_target_of_create() -> void:
 	var stone := sim.spawn(Materials.make("stone", Vector2(700, 600)))
 	var maker := sim.cast(p, {"verb": "create", "what": {"material": "wood"}}, Vector2(400, 360))
 	var first: WorldObject = maker.spell.created[0]
-	var ast := {"verb": "move", "what": {"closest": "stone"}, "to": {"target_of": {"ref": "chosen"}}}
-	var mover := sim.cast(p, with_chosen(ast, [maker.id]), Vector2.ZERO)
+	var ast := {"verb": "move", "what": {"closest": "stone"}, "to": {"target_of": {"ref": "this"}}}
+	var mover := sim.cast(p, with_picks(ast, [maker.id]), Vector2.ZERO)
 	check(mover.spell.destination() == first, "Target of a Create is its product")
 	run(sim, 3 * Simulation.TICK_RATE)
 	check(maker.spell.created.size() > 1 and mover.spell.destination() == maker.spell.created.back(),
 		"...its newest product, as it keeps creating")
 	var warden := sim.cast(p, FIRE_WARDEN, Vector2(400, 360))
-	var look := sim.cast(p, with_chosen({"verb": "destroy", "what": {"target_of": {"ref": "chosen"}}}, [warden.id]), Vector2.ZERO)
+	var look := sim.cast(p, with_picks({"verb": "destroy", "what": {"target_of": {"ref": "this"}}}, [warden.id]), Vector2.ZERO)
 	var made: WorldObject = warden.spell.what
 	check(made.spell != null and look.spell.target() == made, "Target of a Create Spell is the spell it made")
 
@@ -628,13 +632,13 @@ func test_target_of_nests() -> void:
 	var p: WorldObject = w[1]
 	var dummy := sim.spawn(Materials.make_player(Vector2(900, 360)))
 	var selector := sim.cast(p, {"verb": "select", "qualifier": "player"}, Vector2.ZERO)
-	var aimer := sim.cast(p, with_chosen({"verb": "destroy", "what": {"target_of": {"ref": "chosen"}}}, [selector.id]), Vector2.ZERO)
+	var aimer := sim.cast(p, with_picks({"verb": "destroy", "what": {"target_of": {"ref": "this"}}}, [selector.id]), Vector2.ZERO)
 	check(aimer.spell.target() == dummy, "Target of a held selector is its pick")
-	var ast := {"verb": "destroy", "what": {"target_of": {"target_of": {"ref": "chosen"}}}}
+	var ast := {"verb": "destroy", "what": {"target_of": {"target_of": {"ref": "this"}}}}
 	check(SpellGrammar.validate(ast) == "", "Target of nests")
-	var outer := sim.cast(p, with_chosen(ast, [aimer.id]), Vector2.ZERO)
+	var outer := sim.cast(p, with_picks(ast, [aimer.id]), Vector2.ZERO)
 	check(outer.spell.target() == null, "Target of (Target of a Destroy) is the target's own target: none here")
-	var via_selector := sim.cast(p, with_chosen({"verb": "destroy", "what": {"target_of": {"ref": "chosen"}}}, [aimer.id]), Vector2.ZERO)
+	var via_selector := sim.cast(p, with_picks({"verb": "destroy", "what": {"target_of": {"ref": "this"}}}, [aimer.id]), Vector2.ZERO)
 	check(via_selector.spell.target() == dummy, "Target of a spell following a selector is that selector's pick")
 
 
@@ -681,9 +685,9 @@ func test_destroy_follows_selector_to_next_pick() -> void:
 	sim.spawn(Materials.make("fire", Vector2(300, 360)))
 	sim.spawn(Materials.make("fire", Vector2(400, 360)))
 	var selector := sim.cast(p, {"verb": "select", "qualifier": "fire"}, Vector2.ZERO)
-	var turret := sim.cast(p, with_chosen({"verb": "destroy", "what": {"target_of": {"ref": "chosen"}}}, [selector.id]), Vector2.ZERO)
+	var turret := sim.cast(p, with_picks({"verb": "destroy", "what": {"target_of": {"ref": "this"}}}, [selector.id]), Vector2.ZERO)
 	run(sim, 10)
-	check(count(sim, "fire") == 0 and not turret.dead, "Destroy (Target of Chosen) destroys one pick after another, then waits")
+	check(count(sim, "fire") == 0 and not turret.dead, "Destroy (Target of This) destroys one pick after another, then waits")
 
 
 func test_this_and_there() -> void:
@@ -787,9 +791,9 @@ func test_relations() -> void:
 	var wall := sim.cast(p, {"verb": "create", "what": {"material": "wood"}}, Vector2(600, 360))
 	run(sim, 3 * Simulation.TICK_RATE)
 	var ask := func(noun: Dictionary) -> Array[WorldObject]:
-		return sim.cast(p, with_chosen({"verb": "mark", "what": noun}, [wall.id]), Vector2.ZERO).spell.targets()
-	check(ask.call({"products_of": {"ref": "chosen"}}) == wall.spell.created, "Products of is everything a Create made")
-	check(ask.call({"caster_of": {"ref": "chosen"}}) == [p], "Caster of is who cast the spell")
+		return sim.cast(p, with_picks({"verb": "mark", "what": noun}, [wall.id]), Vector2.ZERO).spell.targets()
+	check(ask.call({"products_of": {"ref": "this"}}) == wall.spell.created, "Products of is everything a Create made")
+	check(ask.call({"caster_of": {"ref": "this"}}) == [p], "Caster of is who cast the spell")
 	var first: WorldObject = wall.spell.created[0]
 	var maker := sim.cast(p, {"verb": "destroy", "what": {"maker_of": {"ref": "this", "id": first.id}}}, Vector2.ZERO)
 	check(maker.spell.target() == wall, "Maker of is the spell that made it")
@@ -892,9 +896,9 @@ func test_alternate_takes_attached_spell() -> void:
 	var p: WorldObject = w[1]
 	var held := sim.cast(p, {"verb": "select", "what": {"closest": "player"}}, Vector2.ZERO)
 	var mana_before: float = held.spell.mana["violet"]
-	var ast := {"verb": "alternate", "first": {"ref": "chosen", "id": held.id},
+	var ast := {"verb": "alternate", "first": {"ref": "this", "id": held.id},
 			"second": {"slot": 0, "spell": {"verb": "create", "what": {"material": "fire"}}}}
-	check(SpellGrammar.to_text(ast) == "Alternate [Chosen] [Create Fire].", "Chosen reads as an argument")
+	check(SpellGrammar.to_text(ast) == "Alternate [This] [Create Fire].", "This reads as an argument")
 	check(SpellGrammar.cast_picks(ast).size() == 1, "The attached spell is picked when casting")
 	var alt := sim.cast(p, ast, Vector2(600, 360))
 	check(held.spell.parent == alt and not held in sim.inventory(p), "It takes the attached spell over")
@@ -1016,7 +1020,7 @@ func test_impact_once_per_hit() -> void:
 	var dummy := sim.spawn(Materials.make_player(Vector2(700, 300)))
 	sim.spawn(Materials.make("stone", Vector2(400, 300)))
 	var sel := sim.cast(p, {"verb": "select", "what": {"closest": "player"}}, Vector2.ZERO)
-	sim.cast(p, with_chosen({"verb": "move", "what": {"closest": "stone"}, "to": {"target_of": {"ref": "chosen"}}}, [sel.id]), Vector2.ZERO)
+	sim.cast(p, with_picks({"verb": "move", "what": {"closest": "stone"}, "to": {"target_of": {"ref": "this"}}}, [sel.id]), Vector2.ZERO)
 	run(sim, 3 * Simulation.TICK_RATE)
 	var after_hit := dummy.health
 	check(after_hit < dummy.max_health, "A chasing stone hits its target")
@@ -1047,10 +1051,10 @@ func test_parse_round_trip() -> void:
 	spells.append_array([
 		{"verb": "destroy", "what": {"all": "fire", "within": 3, "from": {"ref": "there"}}, "adverbs": {"up_to": 2}},
 		{"verb": "move", "what": {"closest": "stone", "adj": ["moving", "mine"], "from": {"ref": "this"}}, "to": {"ref": "here"}},
-		{"verb": "mark", "what": {"caster_of": {"target_of": {"ref": "chosen"}}}},
+		{"verb": "mark", "what": {"caster_of": {"target_of": {"ref": "this"}}}},
 		{"verb": "create", "what": {"spell": {"verb": "create", "what": {"material": "fire"}, "at": {"ref": "here"}}}, "adverbs": {"up_to": 5}},
 		{"verb": "create", "what": {"material": "water"}, "at": {"farthest": "player", "within": 5}},
-		{"verb": "alternate", "first": {"ref": "chosen"}, "second": {"slot": 9}},
+		{"verb": "alternate", "first": {"ref": "this"}, "second": {"slot": 9}},
 		{"verb": "select", "what": {"random": "thing", "adj": ["burning"]}},
 		{"verb": "destroy", "what": {"products_of": {"maker_of": {"ref": "aimed"}}}},
 	])
@@ -1071,8 +1075,9 @@ func test_parse_typed() -> void:
 		"create fire at aimed": "Create Fire at Aimed.",
 		"closest player": "Hold (Closest Player).",
 		"alternate 5 6": "Alternate [spell 5] [spell 6].",
-		"alt chosen 0": "Alternate [Chosen] [spell 0].",
-		"move closest stone to target of chosen": "Move (Closest Stone) to (Target of Chosen).",
+		"alt this 0": "Alternate [This] [spell 0].",
+		"alt chosen 0": "Alternate [This] [spell 0].",
+		"move closest stone to target of chosen": "Move (Closest Stone) to (Target of This).",
 		"mark all moving mine things": "Mark (All Moving Mine Thing).",
 		"MOVE This to THERE.": "Move This to There.",
 		"move stone to me": "Move (Closest Stone) to Me.",
@@ -1153,8 +1158,8 @@ func test_chip_menus() -> void:
 	var spells: Array = Sandbox.PRESETS.duplicate(true)
 	spells.append_array([
 		{"verb": "destroy", "what": {"all": "fire", "adj": ["moving"], "within": 3, "from": {"ref": "there"}}, "adverbs": {"up_to": 2}},
-		{"verb": "create", "what": {"material": "water"}, "at": {"caster_of": {"ref": "chosen"}}},
-		{"verb": "alternate", "first": {"ref": "chosen"}, "second": {"slot": 9}},
+		{"verb": "create", "what": {"material": "water"}, "at": {"caster_of": {"ref": "this"}}},
+		{"verb": "alternate", "first": {"ref": "this"}, "second": {"slot": 9}},
 		{"verb": "mark", "what": {"random": "mana", "adj": ["mine", "theirs", "marked", "burning"]}},
 	])
 	var tried := 0
@@ -1207,8 +1212,8 @@ func test_preview() -> void:
 		"The first There is the mouse")
 	var second: Dictionary = SpellParser.parse("move this to there")["ast"]
 	check(SpellPreview.targets(sim, p, second, near.pos)["to"] == null, "A second pick isn't known")
-	var chosen: Dictionary = SpellParser.parse("move chosen to there")["ast"]
-	check(SpellPreview.targets(sim, p, chosen, near.pos)["to"] == null, "...even after a Chosen")
+	var old_word: Dictionary = SpellParser.parse("move chosen to there")["ast"]  # chosen: an old word for This
+	check(SpellPreview.targets(sim, p, old_word, near.pos)["to"] == null, "...even after a This")
 
 
 func test_spellbook_saves() -> void:
@@ -1285,8 +1290,8 @@ func test_cast_flow() -> void:
 	var sent := flow.take()
 	check(sent["ast"]["what"] == {"ref": "this", "id": stone.id} and sent["ast"]["to"] == {"ref": "there", "at": Vector2(5, 6)},
 		"The picks are written into the spell sent")
-	flow.begin(SpellParser.parse("move chosen to there")["ast"], Vector2(7, 8), null)
-	check(flow.picking() == "chosen", "A first Chosen is asked for (only This and There come from the mouse)")
+	flow.begin(SpellParser.parse("move this to there")["ast"], Vector2(7, 8), null)
+	check(flow.picking() == "this", "A first This with nothing under the mouse is asked for")
 	flow.cancel()
 	check(not flow.busy() and flow.take().is_empty(), "Cancelling sends nothing")
 	flow.begin(SpellParser.parse("destroy this")["ast"], Vector2.ZERO, null)
@@ -1356,11 +1361,11 @@ func test_picker_choose() -> void:
 	var p: WorldObject = w[1]
 	var a := sim.cast(p, {"verb": "select", "what": {"ref": "me"}}, p.pos)
 	var b := sim.cast(p, {"verb": "select", "what": {"ref": "here"}}, p.pos)
-	var picker := ChosenPicker.new()
+	var picker := SpellPicker.new()
 	root.add_child(picker)
 	var got := []
 	picker.picked.connect(func(id: int) -> void: got.append(id))
-	picker.ask({"verb": "select", "what": {"ref": "chosen"}}, 1, 1, sim.inventory(p))
+	picker.ask_drop(sim.inventory(p))
 	picker.choose(12345)
 	check(got.is_empty() and picker.visible, "Clicking a spell that isn't on offer picks nothing")
 	picker.choose(b.id)
@@ -1501,7 +1506,7 @@ func test_fountains() -> void:
 	check(spell != null, "(setup)")
 
 
-## Plays `level` with `casts` ([tick, typed spell, where There is]; Chosen is
+## Plays `level` with `casts` ([tick, typed spell, where There is]; This is
 ## the caster's first attached spell) and returns its result.
 func play_level(level: int, casts: Array, seconds: float) -> String:
 	var sim := Simulation.new()
@@ -1516,7 +1521,7 @@ func play_level(level: int, casts: Array, seconds: float) -> String:
 			for n in SpellGrammar.cast_picks(ast):
 				if n["ref"] == "there":
 					n["at"] = c[2]
-				elif n["ref"] == "chosen":
+				elif n["ref"] == "this":
 					n["id"] = sim.inventory(p)[0].id
 			cmd = {"cast": ast, "aim": c[2]}
 		sim.step({0: cmd})
@@ -1532,7 +1537,7 @@ func test_levels() -> void:
 	check(play_level(2, [[0, "move all logs within 3 of there away from there", Levels.RING]], 20) == "won",
 		"Level 2: Move (All Wood within 3 m of There) away from There wins")
 	check(play_level(3, [], 45) == "lost", "Level 3: left alone, the house burns")
-	check(play_level(3, [[0, "hold all fire", Vector2.ZERO], [2, "destroy target of chosen", Vector2.ZERO]], 45) == "won",
+	check(play_level(3, [[0, "hold all fire", Vector2.ZERO], [2, "destroy target of this", Vector2.ZERO]], 45) == "won",
 		"...and a live tracker saves it in two casts")
 
 

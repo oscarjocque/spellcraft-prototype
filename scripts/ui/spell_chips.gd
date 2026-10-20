@@ -12,7 +12,7 @@ const NOUN_GROUPS := [
 	["You", ["me", "here"]],
 	["Pick", ["closest", "farthest", "random", "all"]],
 	["Point", ["this", "there", "aimed"]],
-	["Spell", ["chosen", "it", "self"]],
+	["Spell", ["it", "self"]],
 	["Of", ["target_of", "caster_of", "maker_of", "products_of"]],
 ]
 
@@ -201,12 +201,12 @@ func _add_alternate_arg(arg: Dictionary) -> void:
 	var set_slot := func(n: int) -> void:
 		arg.clear()
 		arg["slot"] = (n + 9) % 10
-	var label := "Chosen" if arg.has("ref") else "spell %d" % ((arg.get("slot", 0) + 1) % 10)
+	var label := "This" if arg.has("ref") else "spell %d" % ((arg.get("slot", 0) + 1) % 10)
 	_text("[")
-	_chip(label, "chosen" if arg.has("ref") else "", [
-		["Chosen (an attached spell)", func() -> void:
+	_chip(label, "this" if arg.has("ref") else "", [
+		["This (an attached spell)", func() -> void:
 			arg.clear()
-			arg["ref"] = "chosen"],
+			arg["ref"] = "this"],
 		["Spell 1–5 ▸", _number_items([1, 2, 3, 4, 5], "spell %d", set_slot)],
 		["Spell 6–0 ▸", _number_items([6, 7, 8, 9, 0], "spell %d", set_slot)],
 	])

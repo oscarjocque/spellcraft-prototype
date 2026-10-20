@@ -1,8 +1,7 @@
-class_name ChosenPicker
+class_name SpellPicker
 extends PanelContainer
-## The window that asks the player to pick one of their attached spells: for
-## a Chosen in the spell being cast (once for each, in reading order), or a
-## spell to drop. The game keeps running meanwhile.
+## The window that asks the player to pick one of their attached spells to
+## drop. The game keeps running meanwhile.
 ##
 ## Spells keep the numbers they have in the HUD's list of attached spells,
 ## and their number key picks them (as does clicking one in the world); 0
@@ -44,12 +43,6 @@ func _ready() -> void:
 	hint.add_theme_font_size_override("font_size", 12)
 	hint.add_theme_color_override("font_color", Color("8a8f98"))
 	box.add_child(hint)
-
-
-## Shows the choice for Chosen `index` (1-based) of `total` in `spell`.
-func ask(spell: Dictionary, index: int, total: int, attached: Array[WorldObject]) -> void:
-	_open("%s\n[b][color=#ffd34d]Chosen %d of %d:[/color][/b] which attached spell?" % [SpellText.bbcode(spell),
-			index, total], attached, true)
 
 
 ## Shows the choice of an attached spell to drop.

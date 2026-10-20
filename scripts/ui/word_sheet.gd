@@ -10,15 +10,15 @@ const GROUPS := [
 		"a thing on its own means the closest one"],
 	["Pickers", ["closest", "farthest", "random", "all"], ""],
 	["Adjectives", ["moving", "burning", "mine", "theirs", "marked"], "go before the thing"],
-	["Nouns", ["me", "here", "aimed", "this", "there", "chosen", "it", "self"],
-		"This, There: the mouse · Chosen: an attached spell · It: in Alternate · Self: the spell"],
+	["Nouns", ["me", "here", "aimed", "this", "there", "it", "self"],
+		"This: a thing or spell you click (or an attached spell's number) · There: a spot · It: in Alternate · Self: the spell"],
 	["Of", ["target_of", "caster_of", "maker_of", "products_of"], "followed by a noun"],
 	["Extras", ["within", "from", "away", "at", "up_to"], "Move … away from …  ·  Create … at …  ·  …, up to 2"],
 ]
 const EXAMPLES := [
 	"mo st", "de", "destroy all fires within 3 of here", "create fire at there",
 	"move this to there", "mark all moving stones, up to 2", "closest player",
-	"move stone to target of chosen", "create spell [destroy fire]", "alternate 5 6", "move all logs away from there",
+	"move stone to target of this", "create spell [destroy fire]", "alternate 5 6", "move all logs away from there",
 	"pull the nearest rock",
 ]
 

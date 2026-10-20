@@ -26,7 +26,7 @@ extends RefCounted
 const VERB_WORDS := ["move", "create", "destroy", "mark", "hold", "alternate"]
 ## Noun words, most useful first: the order suggestions and ambiguous
 ## prefixes go by.
-const NOUN_WORDS := ["closest", "me", "this", "there", "all", "here", "aimed", "chosen", "it", "self",
+const NOUN_WORDS := ["closest", "me", "this", "there", "all", "here", "aimed", "it", "self",
 		"farthest", "random", "target", "caster", "maker", "products"]
 const KINDS := ["fire", "water", "wood", "stone", "spell"]
 const QUALIFIER_WORDS := ["stone", "fire", "player", "thing", "wood", "water", "spell", "mana"]
@@ -42,7 +42,7 @@ const SYNONYMS := {
 	"put": "move", "send": "move", "bring": "pull", "push": "pushaway",
 	"nearest": "closest", "furthest": "farthest", "every": "all", "each": "all", "any": "random",
 	"rock": "stone", "flame": "fire", "tree": "wood", "log": "wood",
-	"myself": "me", "my": "mine", "their": "theirs",
+	"myself": "me", "my": "mine", "chosen": "this", "that": "this", "their": "theirs",
 	"everything": ["all", "thing"], "something": ["random", "thing"],
 }
 
@@ -337,9 +337,9 @@ func _alt_arg(i: int) -> Array:
 	var bracketed := _is(i, "[")
 	var k := i + 1 if bracketed else i
 	var args := []
-	for w in _word(k, ["spell", "chosen"]):
-		if w == "chosen":
-			args.append([{"ref": "chosen"}, k + 1])
+	for w in _word(k, ["spell", "this"]):
+		if w == "this":
+			args.append([{"ref": "this"}, k + 1])
 		else:
 			for n in _number(k + 1, SLOT_KEYS):
 				args.append([{"slot": (n + 9) % 10}, k + 2])

@@ -6,7 +6,7 @@ extends Node2D
 @onready var view: WorldView = $WorldView
 @onready var hud: Hud = $Hud
 @onready var editor: SpellEditor = $Hud/SpellEditor
-@onready var picker: ChosenPicker = $Hud/ChosenPicker
+@onready var picker: SpellPicker = $Hud/SpellPicker
 @onready var quick: QuickCast = $Hud/QuickCast
 @onready var words: WordSheet = $Hud/WordSheet
 
@@ -40,16 +40,9 @@ func _ready() -> void:
 		slots.append_array(Sandbox.PRESETS.duplicate(true))
 		editor.open(slots, selected))
 	picker.picked.connect(func(id: int) -> void:
-		if _dropping:
-			_dropping = false
-			_pending_drop = id
-		else:
-			_on_picked(id))
-	picker.cancelled.connect(func() -> void:
-		if _dropping:
-			_dropping = false
-		else:
-			_cancel_cast())
+		_dropping = false
+		_pending_drop = id)
+	picker.cancelled.connect(func() -> void: _dropping = false)
 	_reset()
 
 
@@ -88,7 +81,7 @@ func _process(delta: float) -> void:
 		view.preview_verb = ast["verb"]
 	elif quick.visible and quick.input.result.has("ast"):
 		var ast: Dictionary = quick.input.result["ast"]
-		view.preview = SpellPreview.targets(sim, player, ast, mouse)
+		view.preview = SpellPreview.targets(sim, player, ast, mouse, true, _under(mouse))
 		view.preview_verb = ast["verb"]
 		quick.set_status(SpellPreview.describe(ast, view.preview))
 	elif quick.visible:
@@ -102,7 +95,7 @@ func _process(delta: float) -> void:
 	var what := flow.picking()
 	if what in ["this", "there"]:  # where the eyes are: by the mouse
 		tip = "[color=#ffd34d][b]%s?[/b] click %s · Esc cancels[/color]\n%s" % [what.capitalize(),
-				"a place" if what == "there" else "a thing", tip]
+				"a place" if what == "there" else "a thing or a spell (or its number)", tip]
 	hud.tooltip(tip, mouse)
 
 
@@ -134,34 +127,31 @@ func _cast(spell: Dictionary, aim: Vector2, slot: int) -> void:
 		return
 	hud.hide_hint()
 	# The spells of the slots an Alternate uses are copied in now, as they are.
-	flow.begin(SpellGrammar.embed_slots(spell, slots, [slot] if slot >= 0 else []), aim, sim.object_at(aim))
-	_ask_chosen()
+	flow.begin(SpellGrammar.embed_slots(spell, slots, [slot] if slot >= 0 else []), aim, _under(aim))
 
 
-## Opens the window for a Chosen, if that's the pick to make.
-func _ask_chosen() -> void:
-	if flow.picking() == "chosen":
-		picker.ask(flow.spell(), flow.pick_number(), flow.pick_count(), sim.inventory(player))
+## What This would pick at `at`: a spell's diamond there, else the thing.
+func _under(at: Vector2) -> WorldObject:
+	var spell := view.spell_at(at)
+	return spell if spell != null else sim.object_at(at)
 
 
 func _on_picked(value: Variant) -> void:
 	flow.pick(value)
-	_ask_chosen()
 
 
 func _cancel_cast() -> void:
 	flow.cancel()
-	picker.hide()
 
 
 ## What the HUD should ask for, if anything.
 func _prompt() -> String:
 	var what := flow.picking()
-	if what == "" or what == "chosen":
+	if what == "":
 		return ""
-	return "%s\n[b][color=#ffd34d]Click %s for %s (%d of %d)[/color][/b] [color=#8a8f98]· Esc cancels[/color]" % [
-		SpellText.bbcode(flow.spell()), "a thing" if what == "this" else "a place",
-		what.capitalize(), flow.pick_number(), flow.pick_count()]
+	return "%s\n[b][color=#ffd34d]%s (%d of %d): click %s[/color][/b] [color=#8a8f98]· Esc cancels[/color]" % [
+		SpellText.bbcode(flow.spell()), what.capitalize(), flow.pick_number(), flow.pick_count(),
+		"a thing or a spell, or press its number" if what == "this" else "a place"]
 
 
 ## The words that describe `o` from the player's side, colored by mana.
@@ -278,18 +268,25 @@ func _unhandled_input(event: InputEvent) -> void:
 			_reset()
 
 
-## While picking This or There: a click picks, Esc or a right click cancels
-## the cast.
+## While picking This or There: a click picks (This: a thing or a spell's
+## diamond; an attached spell's number key picks it too), Esc or a right
+## click cancels the cast.
 func _handle_world_pick(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE \
 			or event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
 		_cancel_cast()
+	elif event is InputEventKey and event.pressed and not event.echo and flow.picking() == "this":
+		var n: int = event.keycode - KEY_1
+		var attached := sim.inventory(player)
+		if n >= 0 and n < mini(attached.size(), 9):
+			_on_picked(attached[n].id)
+			get_viewport().set_input_as_handled()
 	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		var at := view.get_global_mouse_position()
 		if flow.picking() == "there":
 			_on_picked(at)
 			return
-		var o := sim.object_at(at)
+		var o := _under(at)
 		if o != null:
 			_on_picked(o.id)
 

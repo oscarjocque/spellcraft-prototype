@@ -94,7 +94,7 @@ plentiful, and each needs more spellcraft than the last.
 3. **Firebreak**: fires creep in on a wooden house from every side, a new one
    every 3 s; keep 2 of its 3 logs for 40 s. Casting `destroy fire` by hand
    works if you keep it up every couple of seconds; a live tracker does it in
-   two casts: `hold all fire`, then `destroy target of chosen` picking it.
+   two casts: `hold all fire`, then `destroy target of this`, pressing the held spell's number.
 
 In levels 4–6 you start with **no mana**, no wild crystals appear, and what
 lies around decides which words you can afford (F1 shows each word's color):
@@ -121,7 +121,7 @@ lies around decides which words you can afford (F1 shows each word's color):
 | Qualifiers | Thing *(any physical object)*, Fire, Water, Wood, Stone, Spell, Player, Mana |
 | Pickers | Closest, Farthest, Random, All |
 | Adjectives | Moving, Burning, Mine, Theirs, Marked |
-| Picked when casting | Chosen *(an attached spell)*, This *(click an object)*, There *(click a place)* |
+| Picked when casting | This *(click a thing or a spell, or press an attached spell's number)*, There *(click a place)* |
 | Other nouns | Me, Here *(the spell's location)*, Aimed, It *(inside an Alternate)*, Self *(the spell itself)* |
 | Connectives | Move … to …, Move … away from … |
 | Adverbs | up to N *(1, 2, 3 or 5)* |
@@ -137,7 +137,7 @@ The preset slots (keys 1–9 and 0):
 | 4 | Destroy (Closest Fire). | Extinguish |
 | 5 | Move (Closest Stone) to Me. | Pull |
 | 6 | Move (Closest Stone) to (Closest Player). | Boulder throw |
-| 7 + 8 | Hold (Closest Player), then Move (Closest Stone) to (Target of Chosen). | Live tracker |
+| 7 + 8 | Hold (Closest Player), then Move (Closest Stone) to (Target of This). | Live tracker |
 | 9 | Create Spell [Destroy (Closest Fire)]. | Fire warden |
 | 0 | Move This to There. | Telekinesis |
 
@@ -158,12 +158,13 @@ A noun says what a spell acts on. Spells read like sentences:
   spell, or of a noun). A spell attached to you never picks you. Inside a
   spell a picker chooses once, at cast; a held one (Hold) chooses again
   every tick, and Random sticks with its pick while it still fits.
-- **Picked when casting:** **This** (an object), **There** (a spot; it becomes
-  an invisible place marker for as long as the spell lasts) and **Chosen**
-  (one of your attached spells, from a window, by its number key). Each use
-  is picked separately, in reading order; the game keeps running while you
+- **Picked when casting:** **This** (any object or spell: click a thing or a
+  spell's diamond, in the world or attached to you, or press an attached
+  spell's number) and **There** (a spot; it becomes an invisible place marker
+  for as long as the spell lasts). Each use is picked separately, in reading
+  order; the game keeps running while you
   pick, and Esc cancels the cast. The first pick comes from where you're
-  already aiming: a first This is the object under the mouse when you cast
+  already aiming: a first This is the thing or spell under the mouse when you cast
   (if there is one), a first There is the mouse's spot, so `Create Fire at
   There` lands at the cursor at once; later ones are clicked.
 - **Aimed** is the first object along the line from the spell toward where
@@ -174,7 +175,7 @@ A noun says what a spell acts on. Spells read like sentences:
   on now (a held noun's value, a Create's newest product, what a Move or
   Destroy acts on); **Caster of** is who cast it; **Maker of** an object is
   the spell that created it; **Products of** a Create is everything it made.
-  They nest: `(Target of (Target of Chosen))`.
+  They nest: `(Target of (Target of This))`.
 - **It**, inside an Alternate, is what the *other* spell acted on in its last
   turn; each of the two spells has its own It. Outside an Alternate it means
   nothing.
@@ -199,14 +200,14 @@ at the end of its sentence. The first is **up to N**, which sets how much:
 
 It reads as `Destroy (All Fire), up to 2.` and, like any word, costs mana.
 
-### Hold, inventory and Chosen
+### Hold, inventory and This
 
 Casting a noun on its own (**Hold**, e.g. `Hold (Closest Player)`) doesn't do
 anything by itself: it stays attached to you and keeps re-reading its noun
 while its mana lasts. Every spell attached to you is in your **inventory**,
-listed top right, and **Chosen** lets another spell use one:
-`Destroy Chosen` dispels it, and `Move (Closest Stone) to (Target of Chosen)`
-follows what a held selector picks now. Several spells can use the same held
+listed top right, and **This** lets another spell use one (or any spell in
+the world): `Destroy This` dispels it, and `Move (Closest Stone) to (Target
+of This)` follows what a held selector picks now. Several spells can use the same held
 noun.
 
 Attached spells are diamonds in a ring around you, numbered as in the list,
@@ -248,7 +249,7 @@ is either:
 - **a spell slot** (`spell 5`): the spell in that slot is copied in when you
   cast, and cast fresh each turn, paid for by the Alternate. A slot that
   leads back to the Alternate itself is rejected.
-- **an attached spell** (**Chosen**, picked when casting): the Alternate takes
+- **an attached spell** (**This**, picked when casting): the Alternate takes
   it over. It leaves your inventory, runs only on its turns (paused, using no
   mana, in between), keeps paying its own way, and ends with the Alternate.
 
@@ -346,7 +347,7 @@ scripts/
   words), ui/spell_input.gd + ui/quick_cast.gd (typing), ui/spell_text.gd
   sandbox.gd       test arena and preset spells
   spellbook.gd     saves and loads the ten slots
-  cast_flow.gd     a cast's picks (Chosen, This, There), then the queue to send
+  cast_flow.gd     a cast's picks (This, There), then the queue to send
   main.gd          runs the tick loop and turns local input into commands
 tests/test_spells.gd   headless tests for every prototype spell and rule
 ```
@@ -378,7 +379,7 @@ constants at the top of each script.
 - **Blocks that change the world drain 0.2 mana per second** of their color (verbs, and what Create makes), **structural blocks 0.05** (pickers, things picked, adjectives, nouns, relations, within, at, away from, up to): a typical spell runs for 30–60 s, and a Hold, which changes nothing, is cheap. Colors follow the design doc's first sketch, and Wood, Me, It and Mana have colors assigned here.
 - **Mana can be selected and moved but not created.** Create Mana would produce mana for less than it yields.
 - **Mana crystals regrow:** one random crystal appears every 3 s, up to 12 in the world.
-- **Picks are stored in the spell.** What you click for This and There, and pick for Chosen, is written into the cast spell, so the server can check it: Chosen must be one of your attached spells, This an existing object, There inside the arena.
+- **Picks are stored in the spell.** What you click for This and There is written into the cast spell, so the server can check it: This must be an existing object or spell (not the spell itself; that's Self), There inside the arena. Chosen, once a separate word for your attached spells, is now part of This; typing "chosen" still works, and saved spellbooks are converted.
 - **Spells are edited in the spellbook while the game is paused, or typed while it runs.** The word menus only offer words that fit the grammar.
 - **Objects are circles.** There are no boxes or height layers yet.
 - **Move is a force against drag** (`Simulation.DRAG`, `Spell.MOVE_SPEED`): drag is the same for every object rather than growing with weight, so every object tops out at the same speed and only heavier ones are slower to get going and to stop. Collisions are fully inelastic along the line between the two objects: no bouncing.

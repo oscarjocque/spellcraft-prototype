@@ -20,7 +20,7 @@ func _ready() -> void:
 	_bottom = _make_label(Vector2(12, 470))
 	_inventory = _make_label(Vector2(860, 8))
 	_inventory.size.x = 410
-	_prompt = _make_label(Vector2(340, 60))
+	_prompt = _make_label(Vector2(340, 125))
 	_prompt.size.x = 600
 	_prompt.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_hint = _make_label(Vector2(290, 120))
@@ -82,7 +82,7 @@ func refresh(sim: Simulation, player: WorldObject, slots: Array, selected: int, 
 	# Grows up from the bottom as messages come and go.
 	_bottom.position.y = _bottom.get_viewport_rect().size.y - _bottom.get_content_height() - 8
 
-	var inv := "[b]Attached spells[/b]  [color=#8a8f98]Chosen picks from these[/color]\n"
+	var inv := "[b]Attached spells[/b]  [color=#8a8f98]This picks one by its number[/color]\n"
 	var attached := sim.inventory(player)
 	if attached.is_empty():
 		inv += "[color=#8a8f98]none[/color]"
