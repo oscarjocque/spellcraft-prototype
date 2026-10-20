@@ -374,12 +374,6 @@ static func to_text(ast: Dictionary) -> String:
 	return join(segments(ast))
 
 
-static func noun_text(noun: Dictionary) -> String:
-	var out := []
-	_noun_segments(noun, out)
-	return join(out)
-
-
 ## The spell as a sentence, in pieces: [text, word] pairs, where word is the
 ## block the text stands for (its mana color) or "" for words that are free.
 static func segments(ast: Dictionary) -> Array:

@@ -90,11 +90,6 @@ func _init(p_ast: Dictionary, p_caster: WorldObject, p_host: WorldObject, p_mana
 		_drain[c] = per_second[c] / Simulation.TICK_RATE
 
 
-## A held noun, cast on its own: it re-reads its noun every tick.
-func is_selector() -> bool:
-	return ast["verb"] == "select"
-
-
 ## Runs once at cast. Pickers inside a spell choose now, and the verb keeps
 ## that choice for its whole life.
 func on_cast(sim: Simulation, aim: Vector2) -> void:
