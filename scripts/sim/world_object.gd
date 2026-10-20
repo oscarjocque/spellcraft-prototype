@@ -15,7 +15,9 @@ var home := Vector2.ZERO  # where a defeated player respawns
 var radius := 16.0
 
 # Physics
-var velocity := Vector2.ZERO  # reset every tick; input and Move set it
+var velocity := Vector2.ZERO  # kept from tick to tick: forces speed it up, drag slows it
+var force := Vector2.ZERO  # pushes on it this tick (Move); reset every tick
+var walk := Vector2.ZERO  # a player's own walking this tick, on top of its velocity
 var mass := 1.0
 var solid := false
 var blocked := false  # stone stopped this object during the last tick
@@ -51,6 +53,15 @@ func matches(qualifier: String) -> bool:
 	if qualifier == "thing":
 		return spell == null and not tags.has("mana") and not tags.has("place")
 	return material == qualifier or tags.has(qualifier)
+
+
+## How it is moving this tick: its velocity plus any walking.
+func motion() -> Vector2:
+	return velocity + walk
+
+
+func is_moving() -> bool:
+	return velocity != Vector2.ZERO or force != Vector2.ZERO or walk != Vector2.ZERO
 
 
 func touches(other: WorldObject) -> bool:

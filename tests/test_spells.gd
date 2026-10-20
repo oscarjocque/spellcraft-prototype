@@ -159,7 +159,8 @@ func test_held_selector_tracks() -> void:
 	run(sim, 2)
 	check(selector.pos.distance_to(p.pos) < 1.0, "Held selector follows its caster")
 	check(selector.spell.target() == b, "Held selector re-chooses every tick")
-	check(heading(stone).dot(stone.pos.direction_to(b.pos)) > 0.95, "Stone follows the new pick")
+	run(sim, Simulation.TICK_RATE)  # a heavy stone takes a moment to turn
+	check(heading(stone).dot(stone.pos.direction_to(b.pos)) > 0.95, "Stone turns to follow the new pick")
 
 	run(sim, 8 * Simulation.TICK_RATE)
 	check(not mover.dead, "Chasing a held selector's pick doesn't end on arrival")
@@ -180,7 +181,7 @@ func test_tracking_gets_around_stone() -> void:
 	var target := sim.spawn(Materials.make_player(Vector2(900, 360)))
 	var selector := sim.cast(p, {"verb": "select", "qualifier": "player"}, Vector2.ZERO)
 	var mover := sim.cast(p, with_chosen({"verb": "move", "what": {"closest": "stone"}, "to": {"target_of": {"ref": "chosen"}}}, [selector.id]), Vector2.ZERO)
-	run(sim, 6 * Simulation.TICK_RATE)
+	run(sim, 8 * Simulation.TICK_RATE)
 	check(not mover.dead, "A chase doesn't end when stone blocks it")
 	check(stone.pos.distance_to(target.pos) < stone.radius + target.radius + 4, "It slides around the stone and reaches its target")
 
@@ -499,15 +500,14 @@ func test_moves_combine() -> void:
 	var w := spell_world()
 	var sim: Simulation = w[0]
 	var p: WorldObject = w[1]
-	var stone := sim.spawn(Materials.make("stone", Vector2(640, 360)))
-	sim.spawn(Materials.make("wood", Vector2(640, 100)))
-	sim.spawn(Materials.make("water", Vector2(1000, 360)))
+	var stone := sim.spawn(Materials.make("stone", Vector2(300, 360)))
+	sim.spawn(Materials.make("wood", Vector2(1100, 160)))
+	sim.spawn(Materials.make("water", Vector2(1100, 560)))
 	sim.cast(p, {"verb": "move", "what": {"closest": "stone"}, "to": {"closest": "wood"}}, Vector2.ZERO)
 	sim.cast(p, {"verb": "move", "what": {"closest": "stone"}, "to": {"closest": "water"}}, Vector2.ZERO)
-	run(sim, 1)
-	var step := stone.pos - stone.prev_pos
-	check(step.x > 0 and step.y < 0, "Two Moves on one object combine their directions")
-	check(step.length() > Spell.MOVE_SPEED * Simulation.DT * 1.3, "...and their speeds add up")
+	run(sim, 30)
+	check(absf(stone.velocity.y) < 20.0, "Two Moves on one object combine their directions (up and down cancel)")
+	check(stone.velocity.x > Spell.MOVE_SPEED * 1.3, "...and their pushes add up")
 	sim.cast(p, {"verb": "move", "what": {"ref": "me"}, "to": {"closest": "water"}}, Vector2.ZERO)
 	sim.step({0: {"move": Vector2.UP}})
 	check(p.pos.x > p.prev_pos.x and p.pos.y < p.prev_pos.y, "A Move on a player adds to their walking")
@@ -991,7 +991,7 @@ func test_impact_damage_is_consistent() -> void:
 	var damage := []
 	for gap in [300, 302, 304, 306, 308, 310, 312]:
 		damage.append(throw_damage(gap))
-	check(damage.all(func(d: float) -> bool: return is_equal_approx(d, damage[0])) and damage[0] > 0.0,
+	check(damage.all(func(d: float) -> bool: return absf(d - damage[0]) < damage[0] * 0.01) and damage[0] > 0.0,
 		"A thrown stone always hits for the same damage, wherever it starts (got %s)" % str(damage))
 
 
@@ -1352,3 +1352,55 @@ func test_picker_choose() -> void:
 	check(got == [b.id] and not picker.visible, "Clicking an attached spell picks it")
 	check(a != null, "(setup)")
 	picker.free()
+
+
+func test_move_pushes_against_drag() -> void:
+	var w := spell_world()
+	var sim: Simulation = w[0]
+	var p: WorldObject = w[1]
+	var stone := sim.spawn(Materials.make("stone", Vector2(300, 200)))
+	var wood := sim.spawn(Materials.make("wood", Vector2(300, 520)))
+	var far := Vector2(800, 0)
+	for o in [stone, wood]:
+		sim.cast(p, {"verb": "move", "what": {"ref": "this", "id": o.id}, "to": {"ref": "there", "at": o.pos + far}}, Vector2.ZERO)
+	run(sim, 2)
+	check(wood.velocity.x > stone.velocity.x * 2.0, "A push gets light things going faster than heavy ones")
+	run(sim, 2 * Simulation.TICK_RATE)
+	for o in [stone, wood]:
+		check(absf(o.velocity.length() - Spell.MOVE_SPEED) < 3.0,
+			"Against drag, a %s tops out at Move's speed (%d)" % [o.material, o.velocity.length()])
+
+
+func test_drag_stops_what_nothing_pushes() -> void:
+	var sim := Simulation.new()
+	var stone := sim.spawn(Materials.make("stone", Vector2(300, 360)))
+	stone.velocity = Vector2(Spell.MOVE_SPEED, 0)
+	run(sim, 3 * Simulation.TICK_RATE)
+	var coast := Spell.MOVE_SPEED * stone.mass / Simulation.DRAG
+	check(stone.velocity == Vector2.ZERO, "Drag brings a coasting stone to a stop")
+	check(absf(stone.pos.x - 300 - coast) < 5.0, "...after coasting about speed x mass / drag (%d px)" % (stone.pos.x - 300))
+
+
+func test_move_to_a_place_stops_there() -> void:
+	var w := spell_world()
+	var sim: Simulation = w[0]
+	var p: WorldObject = w[1]
+	var stone := sim.spawn(Materials.make("stone", Vector2(300, 200)))
+	var spot := Vector2(800, 200)
+	sim.cast(p, {"verb": "move", "what": {"ref": "this", "id": stone.id}, "to": {"ref": "there", "at": spot}}, Vector2.ZERO)
+	run(sim, 8 * Simulation.TICK_RATE)
+	var gap := stone.pos.distance_to(spot) - stone.radius
+	check(stone.velocity == Vector2.ZERO and absf(gap) < 6.0, "Moved to a place, a stone coasts to a stop there, not past it (gap %.1f)" % gap)
+
+
+func test_momentum_carries_into_what_it_hits() -> void:
+	var sim := Simulation.new()
+	var stone := sim.spawn(Materials.make("stone", Vector2(300, 360)))
+	var wood := sim.spawn(Materials.make("wood", Vector2(360, 360)))
+	stone.velocity = Vector2(Spell.MOVE_SPEED, 0)
+	run(sim, 12)
+	check(wood.velocity.x > 0.0 and wood.pos.x > 380.0, "A moving stone shoves what it hits")
+	run(sim, 3 * Simulation.TICK_RATE)
+	check(stone.velocity == Vector2.ZERO and wood.velocity == Vector2.ZERO
+		and stone.pos.distance_to(wood.pos) < stone.radius + wood.radius + 1.0,
+		"...and drag brings them to rest together")

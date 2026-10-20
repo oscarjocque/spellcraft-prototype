@@ -12,6 +12,12 @@ const DT := 1.0 / TICK_RATE
 const ARENA := Rect2(0, 0, 1280, 720)
 
 const PLAYER_SPEED := 160.0  # pixels per second
+## Resistance: a force against motion of this much per pixel per second of
+## speed. A steady push F tops out at F / DRAG whatever the mass; mass only
+## sets how quickly it gets there and how far it coasts after (mass / DRAG
+## seconds to most of the way: half a second for stone, a tenth for a player).
+const DRAG := 400.0
+const STOP_SPEED := 3.0  # pixels per second: slower, with nothing pushing, it stops
 const START_MANA := 30.0  # per color
 const STORE_CAP := 30.0  # storage limit per color
 const INFUSE_CAP := 10.0  # most mana of each color one cast takes from storage
@@ -55,7 +61,8 @@ func step(commands: Dictionary = {}) -> void:
 	tick += 1
 	for o in objects:
 		o.prev_pos = o.pos
-		o.velocity = Vector2.ZERO
+		o.force = Vector2.ZERO
+		o.walk = Vector2.ZERO
 
 	# Behaviors run on a snapshot, so whatever they spawn starts next tick.
 	var snapshot := objects.duplicate()
@@ -238,7 +245,7 @@ func start_spell(ast: Dictionary, caster: WorldObject, pos: Vector2, fuel: Dicti
 
 func _control(o: WorldObject, cmd: Dictionary) -> void:
 	var move: Vector2 = cmd.get("move", Vector2.ZERO)
-	o.velocity = move.limit_length(1.0) * PLAYER_SPEED
+	o.walk = move.limit_length(1.0) * PLAYER_SPEED
 	if cmd.has("drop"):
 		drop(o, cmd["drop"])
 	if cmd.has("cast"):
@@ -256,8 +263,19 @@ func drop(caster: WorldObject, id: int) -> void:
 func _integrate() -> void:
 	for o in objects:
 		o.blocked = false
-		if o.velocity != Vector2.ZERO:
-			o.pos += o.velocity * DT
+		o.pos += o.walk * DT
+		if o.velocity == Vector2.ZERO and o.force == Vector2.ZERO:
+			continue
+		# Worked out exactly for a steady push against drag over the tick, so
+		# it holds for the lightest things too: the velocity eases toward
+		# force / DRAG, at a rate of DRAG / mass.
+		var rate := DRAG / maxf(o.mass, 0.01)
+		var top := o.force / DRAG
+		var fade := exp(-rate * DT)
+		o.pos += top * DT + (o.velocity - top) * (1.0 - fade) / rate
+		o.velocity = top + (o.velocity - top) * fade
+		if o.force == Vector2.ZERO and o.velocity.length() < STOP_SPEED:
+			o.velocity = Vector2.ZERO
 	var n := objects.size()
 	for i in n:
 		var a := objects[i]
@@ -268,7 +286,12 @@ func _integrate() -> void:
 			if not b.dead and b.solid:
 				_separate(a, b)
 	for o in objects:
-		o.pos = o.pos.clamp(ARENA.position + Vector2.ONE * o.radius, ARENA.end - Vector2.ONE * o.radius)
+		var inside := o.pos.clamp(ARENA.position + Vector2.ONE * o.radius, ARENA.end - Vector2.ONE * o.radius)
+		if inside.x != o.pos.x:
+			o.velocity.x = 0.0  # the arena's edge stops it
+		if inside.y != o.pos.y:
+			o.velocity.y = 0.0
+		o.pos = inside
 		o.moved = o.pos - o.prev_pos
 
 
@@ -281,8 +304,8 @@ func _separate(a: WorldObject, b: WorldObject) -> void:
 	if overlap <= 0.0:
 		return
 	var normal := delta / dist if dist > 0.001 else Vector2.RIGHT
-	var a_moving := a.velocity != Vector2.ZERO
-	var b_moving := b.velocity != Vector2.ZERO
+	var a_moving := a.is_moving()
+	var b_moving := b.is_moving()
 	if b.material == "stone" and not b_moving:
 		a.pos -= normal * overlap
 		a.blocked = a_moving
@@ -311,9 +334,30 @@ func _contacts() -> void:
 				touching[pair] = true
 				if not _touching.has(pair):
 					Rules.on_impact(a, b)
+				_collide(a, b)
 			Rules.on_contact(self, a, b)
 			Rules.on_contact(self, b, a)
 	_touching = touching
+
+
+## Two solid things touching and closing on each other stop closing: the
+## one moving into still stone stops dead along the line between them;
+## otherwise they go on together along it, sharing their momentum (heavy
+## things shove light ones). Sliding past each other is untouched.
+func _collide(a: WorldObject, b: WorldObject) -> void:
+	var normal := a.pos.direction_to(b.pos)
+	if (a.motion() - b.motion()).dot(normal) <= 0.0:
+		return
+	var va := a.velocity.dot(normal)
+	var vb := b.velocity.dot(normal)
+	if b.material == "stone" and not b.is_moving():
+		a.velocity -= normal * maxf(va, 0.0)
+	elif a.material == "stone" and not a.is_moving():
+		b.velocity -= normal * minf(vb, 0.0)
+	else:
+		var shared := (a.mass * va + b.mass * vb) / (a.mass + b.mass)
+		a.velocity += normal * (shared - va)
+		b.velocity += normal * (shared - vb)
 
 
 func _update_states() -> void:
@@ -343,6 +387,7 @@ func _defeat(o: WorldObject) -> void:
 	say("A player was defeated and respawns.")
 	o.pos = o.home
 	o.prev_pos = o.home
+	o.velocity = Vector2.ZERO
 	o.health = o.max_health
 	o.statuses.clear()
 

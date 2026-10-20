@@ -250,13 +250,24 @@ can itself be a Create Spell.
 
 Interaction rules: fire sets flammable things burning, and burning wood is
 destroyed. Water destroys fire and puts out burning things. Anything moving
-stops at stone. When two solid objects collide, each takes damage
+stops at still stone. When two solid objects collide, each takes damage
 once, from the other's mass times the speed they closed at, if that's high
 enough: a thrown stone hurts a player (and a little itself), a player walking
 into a wall hurts nothing, and something pressed against you hits only when
-it first arrives. Moves
-add up: several Moves on one object combine their pushes (opposite ones
-cancel), and a Move on a player adds to their walking. A spell
+it first arrives.
+
+**Move pushes.** It puts a steady force on what it moves, and everything has
+the same drag, a resistance growing with speed, so a push tops out at Move's
+speed (140 px/s) whatever is pushed. Weight shows in getting there and in
+stopping: a stone takes about a second and a half to get up to speed and
+coasts a while after the push ends, a player a fraction of that, wood and
+fire hardly at all. Moved to something solid, a thing rams into it at speed;
+moved to a place (There) or something that isn't solid, Move lets go in time
+for it to coast to a stop right there. Things keep their momentum when they
+hit: a moving stone shoves a player or wood along, sharing its momentum, and
+still stone stops them dead. Pushes add up: several Moves on one object
+combine (opposite ones cancel), and a Move on a player adds to their walking,
+which itself stays instant. A spell
 that touches mana absorbs it into its own fuel, so `Move (Closest Mana) to It`
 can top up a running spell.
 
@@ -313,3 +324,4 @@ constants at the top of each script.
 - **Picks are stored in the spell.** What you click for This and There, and pick for Chosen, is written into the cast spell, so the server can check it: Chosen must be one of your attached spells, This an existing object, There inside the arena.
 - **Spells are edited in the spellbook while the game is paused, or typed while it runs.** The word menus only offer words that fit the grammar.
 - **Objects are circles.** There are no boxes or height layers yet.
+- **Move is a force against drag** (`Simulation.DRAG`, `Spell.MOVE_SPEED`): drag is the same for every object rather than growing with weight, so every object tops out at the same speed and only heavier ones are slower to get going and to stop. Collisions are fully inelastic along the line between the two objects: no bouncing.

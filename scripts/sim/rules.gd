@@ -19,7 +19,7 @@ const IMPACT_DAMAGE := 0.001  # damage per unit of that momentum, once per hit
 ## moving apart, don't hit.
 static func on_impact(a: WorldObject, b: WorldObject) -> void:
 	var normal := a.pos.direction_to(b.pos)
-	var closing := (a.velocity - b.velocity).dot(normal)
+	var closing := (a.motion() - b.motion()).dot(normal)
 	if closing <= 0.0:
 		return
 	if a.mass * closing >= IMPACT_MOMENTUM:

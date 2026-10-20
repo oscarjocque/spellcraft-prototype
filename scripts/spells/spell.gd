@@ -30,7 +30,8 @@ const CREATE_SEARCH_RINGS := 6  # how far Create looks for a free spot, in rings
 const CREATE_SPELL_TICKS := Simulation.TICK_RATE  # time between created spells
 const CREATED_SPELL_SPACING := 30.0  # distance between spells a Create Spell makes
 const DESTROY_RATE := 100.0  # health per second
-const MOVE_SPEED := 140.0  # pixels per second
+const MOVE_SPEED := 140.0  # pixels per second: how fast a Move gets things going, against drag
+const MOVE_FORCE := Simulation.DRAG * MOVE_SPEED
 const ALTERNATE_TICKS := 3 * Simulation.TICK_RATE  # longest turn in an Alternate
 
 var ast: Dictionary
@@ -238,12 +239,19 @@ func _tick_move(sim: Simulation) -> bool:
 		var dest := _nearest(dests, s)
 		if dest == null or (_done.has(s) and not chasing):
 			continue
-		# Arrived means touching, so the last push always makes contact.
-		if s.blocked or s.pos.distance_to(dest.pos) - s.radius - dest.radius <= 0.5:
+		# Arrived means touching, so the last push always makes contact: what
+		# it moves rams into something solid at speed. Toward something that
+		# isn't solid (a place, fire) it stops pushing in time to coast to a
+		# stop there instead of past it.
+		var dir := s.pos.direction_to(dest.pos)
+		var gap := s.pos.distance_to(dest.pos) - s.radius - dest.radius
+		var coast := 0.0 if dest.solid or chasing else maxf(s.velocity.dot(dir), 0.0) * s.mass / Simulation.DRAG
+		if s.blocked or gap <= maxf(coast, 0.5):
 			_done[s] = true
 			continue
-		# Pushes add up, so several Moves on one object combine.
-		s.velocity += s.pos.direction_to(dest.pos) * MOVE_SPEED
+		# A push, so several Moves on one object combine, and heavy things
+		# take longer to get going.
+		s.force += dir * MOVE_FORCE
 	return chasing or not subjects.all(func(s: WorldObject) -> bool: return _done.has(s))
 
 
