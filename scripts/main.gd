@@ -66,7 +66,13 @@ func _process(delta: float) -> void:
 		_accum = minf(_accum + delta, 0.25)
 		while _accum >= Simulation.DT:
 			_accum -= Simulation.DT
-			sim.step({player.controller: _command()})
+			var attached := sim.inventory(player)
+			var cmd := _command()
+			var feeds: bool = cmd.get("feeds", false)
+			cmd.erase("feeds")
+			sim.step({player.controller: cmd})
+			if feeds:
+				flow.fed(_new_spell(attached))  # the spell cast as a This is that This
 			Levels.step(level, sim, level_state)
 	view.alpha = _accum / Simulation.DT
 	view.preview = {}
@@ -95,7 +101,7 @@ func _process(delta: float) -> void:
 	var what := flow.picking()
 	if what in ["this", "there"]:  # where the eyes are: by the mouse
 		tip = "[color=#ffd34d][b]%s?[/b] click %s · Esc cancels[/color]\n%s" % [what.capitalize(),
-				"a place" if what == "there" else "a thing or a spell (or its number)", tip]
+				"a place" if what == "there" else "a thing or a spell, or cast one", tip]
 	hud.tooltip(tip, mouse)
 
 
@@ -109,11 +115,21 @@ func _command() -> Dictionary:
 	if not next.is_empty():
 		cmd["cast"] = next["ast"]
 		cmd["aim"] = next["aim"]
+		cmd["feeds"] = next["feeds"]  # for _process, which takes it out
 		view.flash(player.pos, WorldView.VERB_COLOR.get(next["ast"]["verb"], Color.WHITE))
 	if _pending_drop != 0:
 		cmd["drop"] = _pending_drop
 		_pending_drop = 0
 	return cmd
+
+
+## The spell attached to the player now that wasn't in `before`, as an id
+## (0 if none: the cast failed).
+func _new_spell(before: Array[WorldObject]) -> int:
+	for o in sim.inventory(player):
+		if not o in before:
+			return o.id
+	return 0
 
 
 ## Casts the selected slot toward `aim` (see CastFlow for the picks).
@@ -123,7 +139,7 @@ func _begin_cast(aim: Vector2) -> void:
 
 ## Casts `spell` (from slot `slot`, or -1 if typed) toward `aim`, after its picks.
 func _cast(spell: Dictionary, aim: Vector2, slot: int) -> void:
-	if flow.busy():
+	if not flow.can_begin():  # while a This is being picked, the spell will be it
 		return
 	hud.hide_hint()
 	# The spells of the slots an Alternate uses are copied in now, as they are.
@@ -151,7 +167,7 @@ func _prompt() -> String:
 		return ""
 	return "%s\n[b][color=#ffd34d]%s (%d of %d): click %s[/color][/b] [color=#8a8f98]· Esc cancels[/color]" % [
 		SpellText.bbcode(flow.spell()), what.capitalize(), flow.pick_number(), flow.pick_count(),
-		"a thing or a spell, or press its number" if what == "this" else "a place"]
+		"a thing or a spell, or cast one (1–0, Enter)" if what == "this" else "a place"]
 
 
 ## The words that describe `o` from the player's side, colored by mana.
@@ -222,7 +238,7 @@ func _input(event: InputEvent) -> void:
 			editor.open(slots, selected)
 		get_viewport().set_input_as_handled()
 	elif event.keycode in [KEY_ENTER, KEY_KP_ENTER] and not editor.visible and not picker.visible \
-			and not flow.busy():
+			and flow.can_begin():
 		quick.open()
 		get_viewport().set_input_as_handled()
 
@@ -269,17 +285,17 @@ func _unhandled_input(event: InputEvent) -> void:
 
 
 ## While picking This or There: a click picks (This: a thing or a spell's
-## diamond; an attached spell's number key picks it too), Esc or a right
-## click cancels the cast.
+## diamond, or a spell cast now with its number key), Esc or a right click
+## cancels the cast.
 func _handle_world_pick(event: InputEvent) -> void:
 	if event is InputEventKey and event.pressed and event.keycode == KEY_ESCAPE \
 			or event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_RIGHT:
 		_cancel_cast()
 	elif event is InputEventKey and event.pressed and not event.echo and flow.picking() == "this":
-		var n: int = event.keycode - KEY_1
-		var attached := sim.inventory(player)
-		if n >= 0 and n < mini(attached.size(), 9):
-			_on_picked(attached[n].id)
+		var slot: int = 9 if event.keycode == KEY_0 else event.keycode - KEY_1
+		if slot >= 0 and slot < mini(slots.size(), 10):
+			selected = slot
+			_begin_cast(view.get_global_mouse_position())  # this spell will be the This
 			get_viewport().set_input_as_handled()
 	elif event is InputEventMouseButton and event.pressed and event.button_index == MOUSE_BUTTON_LEFT:
 		var at := view.get_global_mouse_position()

@@ -26,6 +26,9 @@ func _process(_d):
 		var o = main._under(aim)  # a thing or a spell
 		if main.flow.picking() == "there":
 			main._on_picked(aim)
+		elif rng.randf() < 0.3:
+			main.selected = rng.randi_range(0, 9)
+			main._begin_cast(aim)  # cast a spell to be the This
 		elif o != null:
 			main._on_picked(o.id)
 		elif rng.randf() < 0.2:

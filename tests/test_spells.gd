@@ -1277,7 +1277,8 @@ func test_cast_flow() -> void:
 	var stone := (w[0] as Simulation).spawn(Materials.make("stone", Vector2(300, 300)))
 	var flow := CastFlow.new()
 	flow.begin(SpellParser.parse("create fire")["ast"], Vector2(1, 2), null)
-	check(not flow.busy() and flow.take() == {"ast": {"verb": "create", "what": {"material": "fire"}}, "aim": Vector2(1, 2)},
+	var ready := flow.take()
+	check(not flow.busy() and ready["ast"] == {"verb": "create", "what": {"material": "fire"}} and ready["aim"] == Vector2(1, 2),
 		"A spell with nothing to pick is ready at once")
 	check(flow.take().is_empty(), "...once")
 	flow.begin(SpellParser.parse("move this to there")["ast"], Vector2(300, 300), stone)
@@ -1624,3 +1625,27 @@ func test_scarce_levels() -> void:
 		six.cast("create water at there, up to 1", f)
 		six.wait(3)
 	check(six.state["result"] == "won", "...and a little water puts out each bonfire")
+
+
+func test_cast_a_spell_as_this() -> void:
+	var flow := CastFlow.new()
+	flow.begin(SpellParser.parse("destroy target of this")["ast"], Vector2.ZERO, null)
+	check(flow.picking() == "this" and flow.can_begin(), "While a This is picked, another spell can be cast")
+	flow.begin(SpellParser.parse("move stone to there")["ast"], Vector2(5, 5), null)
+	check(flow.busy() and flow.picking() == "", "...it gets its own picks first (its There is the mouse)")
+	check(not flow.can_begin(), "...and nothing else starts while it goes out")
+	var sent := flow.take()
+	check(sent["feeds"] and sent["ast"]["verb"] == "move", "...then it's sent, marked as the This")
+	flow.fed(42)
+	var parent := flow.take()
+	check(not flow.busy() and parent["ast"]["what"]["target_of"]["id"] == 42, "Once it exists, it is the This, and the first cast goes on")
+
+	flow.begin(SpellParser.parse("destroy this")["ast"], Vector2.ZERO, null)
+	flow.begin(SpellParser.parse("hold closest player")["ast"], Vector2.ZERO, null)
+	flow.take()
+	flow.fed(0)
+	check(flow.picking() == "this", "If the spell couldn't be cast, the This is still asked for")
+	flow.begin(SpellParser.parse("move this to there")["ast"], Vector2.ZERO, null)
+	check(flow.picking() == "this", "A spell cast as a This can itself ask for a This")
+	flow.cancel()
+	check(flow.picking() == "this" and flow.spell()["verb"] == "destroy", "Esc cancels it, and the first cast still wants its This")

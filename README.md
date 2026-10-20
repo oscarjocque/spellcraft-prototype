@@ -94,7 +94,9 @@ plentiful, and each needs more spellcraft than the last.
 3. **Firebreak**: fires creep in on a wooden house from every side, a new one
    every 3 s; keep 2 of its 3 logs for 40 s. Casting `destroy fire` by hand
    works if you keep it up every couple of seconds; a live tracker does it in
-   two casts: `hold all fire`, then `destroy target of this`, pressing the held spell's number.
+   two casts: `hold all fire`, then `destroy target of this`, clicking the
+   held spell by you. Or the other way round: `destroy target of this`, and
+   while it asks for This, type `hold all fire`; the Hold becomes its This.
 
 In levels 4–6 you start with **no mana**, no wild crystals appear, and what
 lies around decides which words you can afford (F1 shows each word's color):
@@ -121,7 +123,7 @@ lies around decides which words you can afford (F1 shows each word's color):
 | Qualifiers | Thing *(any physical object)*, Fire, Water, Wood, Stone, Spell, Player, Mana |
 | Pickers | Closest, Farthest, Random, All |
 | Adjectives | Moving, Burning, Mine, Theirs, Marked |
-| Picked when casting | This *(click a thing or a spell, or press an attached spell's number)*, There *(click a place)* |
+| Picked when casting | This *(click a thing or a spell, or cast a spell then and there)*, There *(click a place)* |
 | Other nouns | Me, Here *(the spell's location)*, Aimed, It *(inside an Alternate)*, Self *(the spell itself)* |
 | Connectives | Move … to …, Move … away from … |
 | Adverbs | up to N *(1, 2, 3 or 5)* |
@@ -159,8 +161,9 @@ A noun says what a spell acts on. Spells read like sentences:
   spell a picker chooses once, at cast; a held one (Hold) chooses again
   every tick, and Random sticks with its pick while it still fits.
 - **Picked when casting:** **This** (any object or spell: click a thing or a
-  spell's diamond, in the world or attached to you, or press an attached
-  spell's number) and **There** (a spot; it becomes an invisible place marker
+  spell's diamond, in the world or attached to you, or cast a spell right
+  then, with a number key or the typing bar, and that new spell is the
+  This) and **There** (a spot; it becomes an invisible place marker
   for as long as the spell lasts). Each use is picked separately, in reading
   order; the game keeps running while you
   pick, and Esc cancels the cast. The first pick comes from where you're
