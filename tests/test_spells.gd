@@ -929,9 +929,13 @@ func test_up_to() -> void:
 	run(sim, 10)
 	check(count(sim, "fire") == 2 and host.dead, "...and ends once it has destroyed 2")
 
-	var wood := sim.cast(p, {"verb": "create", "what": {"material": "wood"}, "adverbs": {"up_to": 3}}, Vector2(600, 600))
+	var fire := sim.cast(p, {"verb": "create", "what": {"material": "fire"}, "adverbs": {"up_to": 3}}, Vector2(600, 600))
 	run(sim, 10 * Simulation.TICK_RATE)
-	check(wood.spell.created.size() == 3 and not wood.dead, "Create up to 3 makes 3, then only sustains them")
+	check(fire.spell.created.size() == 3 and not fire.dead, "Create up to 3 makes 3, then only sustains them")
+	var wood := sim.cast(p, {"verb": "create", "what": {"material": "wood"}, "adverbs": {"up_to": 2}}, Vector2(600, 200))
+	run(sim, 5 * Simulation.TICK_RATE)
+	check(wood.spell.created.size() == 2 and wood.dead and wood.spell.created.all(func(o: WorldObject) -> bool: return not o.dead),
+		"...unless what it made lasts anyway: then it ends, and what it made stays")
 
 	var warden := {"verb": "create", "what": {"spell": {"verb": "select", "what": {"closest": "player"}}}, "adverbs": {"up_to": 5}}
 	check(SpellGrammar.spells_created(warden) == 5, "Create Spell up to 5 makes 5 spells")
@@ -1530,3 +1534,89 @@ func test_levels() -> void:
 	check(play_level(3, [], 45) == "lost", "Level 3: left alone, the house burns")
 	check(play_level(3, [[0, "hold all fire", Vector2.ZERO], [2, "destroy target of chosen", Vector2.ZERO]], 45) == "won",
 		"...and a live tracker saves it in two casts")
+
+
+## Plays a level step by step: walking the player, casting typed spells
+## (This is what's at the aim, There the aim), and waiting.
+class LevelRun:
+	var sim := Simulation.new()
+	var state := {}
+	var level := 0
+	var p: WorldObject
+
+	func _init(l: int) -> void:
+		level = l
+		p = Levels.build(l, sim, state)
+
+	func step(cmd := {}) -> void:
+		sim.step({0: cmd})
+		Levels.step(level, sim, state)
+
+	func walk(to: Vector2) -> void:
+		for i in 400:
+			if p.pos.distance_to(to) < 4.0:
+				return
+			step({"move": p.pos.direction_to(to)})
+
+	## Collects every crystal on the player's side of x.
+	func collect(left_of := INF) -> void:
+		for o in sim.objects.duplicate():
+			if not o.dead and o.has_tag("mana") and o.pos.x < left_of:
+				walk(o.pos)
+
+	## Whether the spell was cast (enough mana).
+	func cast(text: String, aim: Vector2) -> bool:
+		var ast: Dictionary = SpellParser.parse(text)["ast"]
+		for n in SpellGrammar.cast_picks(ast):
+			if n["ref"] == "there":
+				n["at"] = aim
+			elif n["ref"] == "this":
+				n["id"] = sim.object_at(aim).id
+		var before := sim.objects.size()
+		step({"cast": ast, "aim": aim})
+		return sim.objects.size() > before
+
+	func wait(seconds: float) -> void:
+		for i in int(seconds * Simulation.TICK_RATE):
+			step()
+
+
+func test_scarce_levels() -> void:
+	var four := LevelRun.new(4)
+	four.collect()
+	check(not four.cast("move stone to there", Levels.GREEN_PAD), "Level 4: Closest is violet, and there's only green")
+	four.walk(Levels.GREEN_STONE - Levels.GREEN_STONE.direction_to(Levels.GREEN_PAD) * 160)
+	check(four.cast("move aimed to there", Levels.GREEN_PAD), "...but Move Aimed to There is all green")
+	four.wait(15)
+	check(four.state["result"] == "won", "...and, lined up, it puts the stone on the pad")
+
+	var five := LevelRun.new(5)
+	five.collect()
+	check(five.p.mana_store["violet"] == 0.0, "Level 5: no violet, so no Destroy")
+	five.walk(Vector2(300, 360))
+	check(five.cast("create fire at there", Levels.BARRICADE), "Create Fire at There takes red and the one green")
+	five.wait(15)
+	check(five.state["result"] == "won", "...and fire on the barricade burns it all")
+
+	var brute := LevelRun.new(6)
+	brute.collect()
+	brute.walk(Vector2(300, 300))
+	brute.cast("destroy this", Levels.BONFIRES[2])
+	brute.wait(40)
+	check(brute.state["result"] == "", "Level 6: Destroy runs out of violet long before a bonfire goes")
+
+	var six := LevelRun.new(6)
+	six.collect()
+	six.wait(4)  # the fountains well up
+	six.walk(Vector2(560, 360))
+	for k in 3:
+		var far := six.sim.objects.filter(func(o: WorldObject) -> bool:
+			return not o.dead and o.has_tag("mana") and o.pos.x > Levels.WALL_X)
+		if not far.is_empty():
+			six.cast("move this to me", far[0].pos)
+			six.wait(5)
+	check(six.p.mana_store["red"] > 0.0 and six.p.mana_store["blue"] > 0.0, "Crystals pulled through the wall reach the player")
+	for f in Levels.BONFIRES:
+		six.cast("create water at there, up to 1", f)
+		six.wait(3)
+	check(six.state["result"] == "won", "...and a little water puts out each bonfire")

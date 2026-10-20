@@ -32,6 +32,11 @@ func _ready() -> void:
 	_level = _make_label(Vector2(330, 8))
 	_level.size.x = 520
 	_level.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
+	var backing := StyleBoxFlat.new()  # readable over the world
+	backing.bg_color = Color(0.106, 0.118, 0.141, 0.85)
+	backing.set_corner_radius_all(6)
+	backing.set_content_margin_all(4)
+	_level.add_theme_stylebox_override("normal", backing)
 	_tip = _make_label(Vector2.ZERO)
 	_tip.size.x = 360
 

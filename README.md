@@ -26,7 +26,7 @@ selector are enough to build spells that interact in ways nobody scripted.
 | Esc | Cancel a cast that is waiting for picks (a right click does too), or close the typing bar |
 | Space | Drop one of your attached spells (pick it in a window, or click it by you) |
 | F1 | Show every word, colored by mana, with typed examples |
-| F2 | Next level (the sandbox, then levels 1–3, then the sandbox again) |
+| F2 | Next level (the sandbox, then levels 1–6, then the sandbox again) |
 | R | Restart the sandbox or level |
 
 ### Making spells fast
@@ -82,9 +82,9 @@ be moved by spells or by what runs into them, but they are Things.
 
 ### Levels
 
-**F2** goes from the sandbox through three test levels, each needing more
-spellcraft than the last; mana is real there, so fountains matter. The goal
-and how it's going show at the top; **R** restarts.
+**F2** goes from the sandbox through six test levels; the goal and how it's
+going show at the top, and **R** restarts. In levels 1–3 mana is real but
+plentiful, and each needs more spellcraft than the last.
 
 1. **Onto the pad**: get a stone onto the gold pad. One spell, with picks:
    `move stone to there`, clicking the pad.
@@ -95,6 +95,22 @@ and how it's going show at the top; **R** restarts.
    every 3 s; keep 2 of its 3 logs for 40 s. Casting `destroy fire` by hand
    works if you keep it up every couple of seconds; a live tracker does it in
    two casts: `hold all fire`, then `destroy target of chosen` picking it.
+
+In levels 4–6 you start with **no mana**, no wild crystals appear, and what
+lies around decides which words you can afford (F1 shows each word's color):
+
+4. **Only green**: the stone onto the pad again, with two green crystals.
+   Closest, This and Me are violet, so `move stone to there` can't be cast.
+   `move aimed to there` is all green: walk until the stone is between you
+   and the pad, then cast it at the pad.
+5. **No violet**: burn the barricade behind a wall of stone. No violet means
+   no Destroy, and no walking round. `create fire at there` costs red and
+   one green word, and there's exactly one green crystal.
+6. **Over the wall**: put out three bonfires. They're too big to Destroy on
+   the 5 violet you'll find, but water puts fire out at once, and red and
+   blue only well up beyond a wall. Mana passes through stone, so spend
+   your green and violet pulling crystals over (`move this to me`, clicking
+   one), then `create water at there, up to 1` on each bonfire.
 
 ## What's in Prototype 1
 
@@ -205,6 +221,10 @@ you, and its Here is where you dropped it. A Move whose destination is another s
 doesn't end when it arrives or is blocked, and slides around obstacles.
 
 ### Away from and Self
+
+**Create … up to N** stops once it has made N things, unless they'd expire
+without it (fire): then it stays to sustain them. Fire and water aren't
+solid, so Create puts them right on whatever they're made at.
 
 **Move** *X* **away from** *Y* pushes *X* straight away from *Y* until it's
 5 m off (letting go in time to coast the rest), or until something stops it;

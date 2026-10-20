@@ -220,10 +220,12 @@ func _capped(objs: Array[WorldObject]) -> Array[WorldObject]:
 
 
 func _tick_move(sim: Simulation) -> bool:
-	# A spell it follows being destroyed cuts it off; objects it moves or moves
-	# to being destroyed just send it looking for others.
-	for b in [_what, _to]:
-		if _state(b) == "lost" and not b["chain"].is_empty():
+	# A spell it follows being destroyed cuts it off, and so does losing what
+	# a This named (that pick can't come back); other objects it moves or
+	# moves to being destroyed just send it looking for others.
+	for k in ["what", "to"]:
+		var b: Dictionary = _what if k == "what" else _to
+		if _state(b) == "lost" and (not b["chain"].is_empty() or ast[k].get("ref", "") == "this"):
 			return false
 	if _state(_what) != "ok":
 		_what = _bind(ast["what"], sim)
@@ -295,6 +297,8 @@ func _tick_create(sim: Simulation) -> bool:
 	if _lifetime > 0:
 		for o in created:
 			o.lifetime = _lifetime  # sustained: none expire while the spell lasts
+	elif not room and _build >= 1.0:
+		return false  # made all it may, and none of it needs sustaining
 	return true
 
 
@@ -600,10 +604,15 @@ func _closest_free(center: Vector2, step: float, radius: float, free: Callable) 
 	return Vector2.INF
 
 
-## No physical object (a Thing) overlaps a circle of `radius` at `at`.
+## No physical object (a Thing) overlaps a circle of `radius` at `at`. What
+## isn't solid (fire, water) only keeps clear of its own kind: fire made on a
+## log is on it, and sets it burning.
 func _is_clear(sim: Simulation, at: Vector2, radius: float) -> bool:
+	var solid: bool = Materials.PROPS.get(_material, {}).get("solid", true)
 	for o in sim.objects:
-		if not o.dead and o.matches("thing") and at.distance_to(o.pos) < o.radius + radius:
+		if o.dead or not o.matches("thing") or (not solid and o.material != _material):
+			continue
+		if at.distance_to(o.pos) < o.radius + radius:
 			return false
 	return true
 

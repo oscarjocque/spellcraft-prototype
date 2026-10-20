@@ -33,6 +33,7 @@ var objects: Array[WorldObject] = []
 var messages: Array[String] = []  # recent messages for the HUD
 var message_ticks: Array[int] = []  # the tick each message was said
 var rng := RandomNumberGenerator.new()
+var wild_mana := true  # crystals of random colors appear around the arena
 var _next_id := 1
 var _touching := {}  # solid pairs in contact last tick, as Vector2i(lower id, higher id)
 
@@ -445,7 +446,7 @@ func _spawn_mana() -> void:
 		for f in objects.duplicate():
 			if not f.dead and f.has_tag("fountain"):
 				_well_up(f)
-	if tick % MANA_SPAWN_TICKS != 0:
+	if tick % MANA_SPAWN_TICKS != 0 or not wild_mana:
 		return
 	var count := 0
 	for o in objects:
