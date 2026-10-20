@@ -97,7 +97,7 @@ func test_boulder_throw() -> void:
 	run(sim, 80)
 	check(stone.pos.distance_to(dummy.pos) < stone.radius + dummy.radius + 4, "Stone reaches the dummy")
 	check(dummy.health < dummy.max_health, "A fast stone damages what it hits")
-	check(count(sim, "spell") == 0, "Move ends on arrival")
+	check(count(sim, "spell") == 1, "Move doesn't end on arrival")
 
 
 func test_fire_burns_wood() -> void:
@@ -127,7 +127,7 @@ func test_stone_blocks_movement() -> void:
 	sim.cast(w[1], {"verb": "move", "what": {"closest": "wood"}, "to": {"ref": "me"}}, Vector2.ZERO)
 	run(sim, 80)
 	check(wood.pos.x > 470, "Stone stops the moving wood")
-	check(count(sim, "spell") == 0, "A blocked Move ends")
+	check(count(sim, "spell") == 1, "A blocked Move keeps trying")
 
 
 func test_dispel() -> void:
@@ -711,6 +711,7 @@ func test_this_and_there() -> void:
 	check(not place.matches("thing"), "A place isn't a Thing")
 	run(sim, 4 * Simulation.TICK_RATE)
 	check(wood.pos.distance_to(Vector2(500, 600)) < wood.radius + 8.0, "This moves to There")
+	host.health = 0.0
 	run(sim, 2)
 	check(host.dead and place.dead, "A place ends with the spell that made it")
 
@@ -1474,8 +1475,8 @@ func test_move_away_from() -> void:
 	var spell := sim.cast(p, {"verb": "move", "what": {"ref": "this", "id": wood.id}, "to": {"ref": "me"}, "away": true}, Vector2.ZERO)
 	run(sim, 6 * Simulation.TICK_RATE)
 	var gap := wood.pos.distance_to(p.pos) - wood.radius - p.radius
-	check(spell.dead and absf(gap - Spell.AWAY_DISTANCE) < 8.0,
-		"It pushes the thing away until it's 5 m off, then ends (gap %d)" % gap)
+	check(not spell.dead and absf(gap - Spell.AWAY_DISTANCE) < 8.0 and wood.velocity == Vector2.ZERO,
+		"It pushes the thing away until it's 5 m off, then rests there (gap %d)" % gap)
 
 
 func test_self() -> void:
@@ -1676,3 +1677,26 @@ func test_spell_mana_limits() -> void:
 	var big := sim.cast(p, {"verb": "move", "what": {"all": "stone", "adj": ["moving", "mine"]}, "to": {"closest": "wood", "within": 3, "from": {"ref": "here"}}}, Vector2.ZERO)
 	check(big.spell.mana["green"] == 18.0 and is_equal_approx(big.spell.fuel_limit["green"], 30.0),
 		"...or what storage has, if that's less")
+
+
+func test_move_rests_and_resumes() -> void:
+	var w := world()
+	var sim: Simulation = w[0]
+	var p: WorldObject = w[1]
+	var stone := sim.spawn(Materials.make("stone", Vector2(400, 200)))
+	var spot := Vector2(800, 200)
+	var spell := sim.cast(p, {"verb": "move", "what": {"ref": "this", "id": stone.id}, "to": {"ref": "there", "at": spot}}, Vector2.ZERO)
+	plenty_of_fuel(spell)
+	run(sim, 8 * Simulation.TICK_RATE)
+	check(not spell.dead and stone.velocity == Vector2.ZERO, "Moved to its goal, the stone rests and the Move stays")
+	var before: float = spell.spell.mana["green"]
+	run(sim, Simulation.TICK_RATE)
+	var per_second: float = SpellGrammar.drain_per_second(spell.spell.ast)["green"]
+	check(is_equal_approx(before - spell.spell.mana["green"], per_second) and stone.force == Vector2.ZERO,
+		"While it rests, the Move pushes nothing and drains only its listed rate")
+	stone.pos.x -= 4.0  # nudged a little: within the slack
+	run(sim, 2)
+	check(stone.velocity == Vector2.ZERO, "A little nudge doesn't set it pushing")
+	stone.pos = Vector2(600, 400)  # knocked well away
+	run(sim, 8 * Simulation.TICK_RATE)
+	check(stone.pos.distance_to(spot) - stone.radius < 8.0, "Knocked away, it's pushed back to its goal")

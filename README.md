@@ -221,8 +221,7 @@ Alternate. Point at one to see its words, what it's doing and its mana.
 **Space** drops one of your attached spells, picked in a window while the
 game keeps running: it stays where it is, stops following you, and leaves
 your inventory. Since it's no longer attached to you, its pickers can pick
-you, and its Here is where you dropped it. A Move whose destination is another spell's target keeps chasing: it
-doesn't end when it arrives or is blocked, and slides around obstacles.
+you, and its Here is where you dropped it.
 
 ### Away from and Self
 
@@ -231,7 +230,7 @@ without it (fire): then it stays to sustain them. Fire and water aren't
 solid, so Create puts them right on whatever they're made at.
 
 **Move** *X* **away from** *Y* pushes *X* straight away from *Y* until it's
-5 m off (letting go in time to coast the rest), or until something stops it;
+5 m off (letting go in time to coast the rest), and keeps it at least that far;
 `push X` is Move X away from Me. **Self** is the spell itself, as an object:
 `Destroy Self` ends it, and `Move Self to There` sends the spell there (a
 spell moving itself leaves its caster, so it stops following them).
@@ -315,7 +314,13 @@ stopping: a stone takes about a second and a half to get up to speed and
 coasts a while after the push ends, a player a fraction of that, wood and
 fire hardly at all. Moved to something solid, a thing rams into it at speed;
 moved to a place (There) or something that isn't solid, Move lets go in time
-for it to coast to a stop right there. Things keep their momentum when they
+for it to coast to a stop right there. **A Move doesn't end when things get
+there**: it stops pushing what's at its goal (and drains only its listed
+rate meanwhile), and pushes it again once it's knocked, or its goal moves,
+more than 8 px off. So `Move Stone to Me` keeps the stone with you as you
+walk, and a Move to another spell's target keeps chasing it. Something in
+the way is pushed against, so a thing slides around obstacles where it can.
+It lasts until its mana runs out. Things keep their momentum when they
 hit: a moving stone shoves a player or wood along, sharing its momentum, and
 still stone stops them dead. Pushes add up: several Moves on one object
 combine (opposite ones cancel), and a Move on a player adds to their walking,

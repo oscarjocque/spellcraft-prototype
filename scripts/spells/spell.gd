@@ -38,6 +38,7 @@ const MOVE_FORCE := Simulation.DRAG * MOVE_SPEED
 const MOVE_WEIGHT_UNIT := 70.0
 const ALTERNATE_TICKS := 3 * Simulation.TICK_RATE  # longest turn in an Alternate
 const AWAY_DISTANCE := 5.0 * SpellGrammar.PIXELS_PER_METER  # Move ... away from X: this far from X
+const REST_SLACK := 8.0  # pixels off its goal before a Move pushes a resting object again
 
 var ast: Dictionary
 var caster: WorldObject
@@ -61,7 +62,7 @@ var _to := {}
 var _at := {}
 var _at_pos := Vector2.INF  # where Create's "at" was last seen
 var _from_bindings: Array = []  # [noun, binding] pairs for pickers' "to"/"of" nouns
-var _done := {}  # Move: objects that arrived or were blocked
+var _resting := {}  # Move: objects at their goal, not being pushed
 
 var _drain := {}  # color -> mana per tick
 var _limit := 0  # its "up to", 0 for none
@@ -231,43 +232,44 @@ func _tick_move(sim: Simulation) -> bool:
 			return false
 	if _state(_what) != "ok":
 		_what = _bind(ast["what"], sim)
-		_done.clear()
 	if _state(_to) != "ok":
 		_to = _bind(ast["to"], sim)
-		_done.clear()
 	var subjects := _capped(_eval(_what))
 	var dests := _eval(_to)
 	if subjects.is_empty() or dests.is_empty():
 		return _pay(1)  # nothing to move, or nowhere to move it, yet: wait
-	# A chase after another spell's target keeps going when it arrives or is
-	# blocked (it slides around what blocks it); other moves are done then.
-	var chasing: bool = not _to["chain"].is_empty()
+	# It doesn't end when things get there: it stops pushing what's at its
+	# goal, and pushes it again once it's knocked (or its goal moves) more
+	# than REST_SLACK off. Something in the way is pushed against, so it
+	# slides around it where it can.
 	var away: bool = ast.get("away", false)
 	var pushes := []  # [object, direction]
 	var weight := 0.0
 	for s in subjects:
 		var dest := _nearest(dests, s)
-		if dest == null or (_done.has(s) and not chasing) or s.has_tag("fixed"):
+		if dest == null or s.has_tag("fixed"):
 			continue
 		var dir := s.pos.direction_to(dest.pos)
 		var gap := s.pos.distance_to(dest.pos) - s.radius - dest.radius
+		var slack := REST_SLACK if _resting.has(s) else 0.0
+		var at_goal := false
 		if away:
 			# Away from X: until it's AWAY_DISTANCE from X, letting go in time
 			# to coast the rest of the way.
 			dir = -dir if dir != Vector2.ZERO else Vector2.RIGHT
 			var coast_away := maxf(s.velocity.dot(dir), 0.0) * s.mass / Simulation.DRAG
-			if s.blocked or (gap + coast_away >= AWAY_DISTANCE and not chasing):
-				_done[s] = true
-				continue
+			at_goal = gap + coast_away >= AWAY_DISTANCE - slack
 		else:
 			# Arrived means touching, so the last push always makes contact:
 			# what it moves rams into something solid at speed. Toward
 			# something that isn't solid (a place, fire) it stops pushing in
 			# time to coast to a stop there instead of past it.
-			var coast := 0.0 if dest.solid or chasing else maxf(s.velocity.dot(dir), 0.0) * s.mass / Simulation.DRAG
-			if s.blocked or gap <= maxf(coast, 0.5):
-				_done[s] = true
-				continue
+			var coast := 0.0 if dest.solid else maxf(s.velocity.dot(dir), 0.0) * s.mass / Simulation.DRAG
+			at_goal = gap <= maxf(coast, 0.5) + slack
+		if at_goal:
+			_resting[s] = true
+			continue
+		_resting.erase(s)
 		if s == host:
 			anchored = false  # a spell moving itself leaves its caster to go
 		pushes.append([s, dir])
@@ -278,7 +280,7 @@ func _tick_move(sim: Simulation) -> bool:
 		# A push, so several Moves on one object combine, and heavy things
 		# take longer to get going.
 		p[0].force += p[1] * MOVE_FORCE
-	return chasing or not subjects.all(func(s: WorldObject) -> bool: return _done.has(s))
+	return true  # until its mana runs out
 
 
 func _tick_create(sim: Simulation) -> bool:
