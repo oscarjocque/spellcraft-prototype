@@ -267,7 +267,16 @@ for it to coast to a stop right there. Things keep their momentum when they
 hit: a moving stone shoves a player or wood along, sharing its momentum, and
 still stone stops them dead. Pushes add up: several Moves on one object
 combine (opposite ones cancel), and a Move on a player adds to their walking,
-which itself stays instant. A spell
+which itself stays instant.
+
+**Weight.** Every object has one: fire 0.1, a spell 1, a mana crystal 2,
+water 20, wood 30, a player 70, stone 200. Besides how sluggish it is to push,
+weight sets what moving it costs: while a Move pushes, its drain is scaled by
+the total weight it pushes, per 70 (a player). Moving a stone drains about
+three times the listed rate, wood under half, fire next to nothing; while it
+has nothing to push, a Move drains its listed rate. Pointing at something
+shows its weight, and the typing bar says what a Move would push and the
+factor. A spell
 that touches mana absorbs it into its own fuel, so `Move (Closest Mana) to It`
 can top up a running spell.
 

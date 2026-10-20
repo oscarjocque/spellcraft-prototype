@@ -168,10 +168,14 @@ func _describe(o: WorldObject) -> String:
 	for adj in SpellGrammar.ADJECTIVES:
 		if o != player and sim.has_adjective(o, adj, player):
 			words.append("[color=#%s]%s[/color]" % [SpellText.color_of(adj).to_html(false), adj])
-	var text := " · ".join(words)
+	var text := " · ".join(words) + "  [color=#8a8f98]weight %s[/color]" % _weight(o.mass)
 	if o.health < o.max_health:
 		text += "  [color=#8a8f98]%d/%d[/color]" % [o.health, o.max_health]
 	return "[font_size=13]%s[/font_size]" % text
+
+
+static func _weight(mass: float) -> String:
+	return str(snappedf(mass, 0.1)).trim_suffix(".0")
 
 
 ## The words for hovering spell `o`: what it says, how it's doing, its mana.

@@ -4,7 +4,7 @@ extends RefCounted
 
 const PROPS := {
 	"fire": {"radius": 14.0, "solid": false, "mass": 0.1, "health": 10.0, "lifetime_s": 10.0, "tags": ["hot"]},
-	"water": {"radius": 18.0, "solid": false, "mass": 1.0, "health": 20.0, "lifetime_s": -1.0, "tags": ["wet"]},
+	"water": {"radius": 18.0, "solid": false, "mass": 20.0, "health": 20.0, "lifetime_s": -1.0, "tags": ["wet"]},
 	"wood": {"radius": 22.0, "solid": true, "mass": 30.0, "health": 60.0, "lifetime_s": -1.0, "tags": ["flammable"]},
 	"stone": {"radius": 20.0, "solid": true, "mass": 200.0, "health": 150.0, "lifetime_s": -1.0, "tags": []},
 }
@@ -50,6 +50,7 @@ static func make_mana(color: String, amount: float, pos: Vector2) -> WorldObject
 	o.tags = {"mana": true}
 	o.pos = pos
 	o.radius = 7.0
+	o.mass = 2.0
 	o.health = 10.0
 	o.max_health = 10.0
 	o.mana_color = color
@@ -64,6 +65,7 @@ static func make_place(pos: Vector2) -> WorldObject:
 	o.tags = {"place": true}
 	o.pos = pos
 	o.radius = 4.0
+	o.mass = 0.1
 	o.health = 1.0
 	o.max_health = 1.0
 	return o
@@ -75,6 +77,7 @@ static func make_spell_host(pos: Vector2) -> WorldObject:
 	o.tags = {"spell": true}
 	o.pos = pos
 	o.radius = 6.0
+	o.mass = 1.0
 	o.health = 10.0
 	o.max_health = 10.0
 	return o

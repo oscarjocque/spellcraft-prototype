@@ -88,4 +88,11 @@ static func describe(ast: Dictionary, found: Dictionary) -> String:
 		return "nothing to act on right now: it would wait"
 	if ast["verb"] == "move" and found["to"] != null and found["to"].is_empty():
 		return "nowhere to move to right now: it would wait"
-	return "acts on %d %s now" % [n, "thing" if n == 1 else "things"]
+	var note := "acts on %d %s now" % [n, "thing" if n == 1 else "things"]
+	if ast["verb"] == "move":
+		var weight := 0.0
+		for o in found["what"]:
+			weight += o.mass
+		note += ", weighing %s: mana ×%s while pushing" % [str(snappedf(weight, 0.1)).trim_suffix(".0"),
+				str(snappedf(weight / Spell.MOVE_WEIGHT_UNIT, 0.01))]
+	return note

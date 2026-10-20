@@ -32,6 +32,10 @@ const CREATED_SPELL_SPACING := 30.0  # distance between spells a Create Spell ma
 const DESTROY_RATE := 100.0  # health per second
 const MOVE_SPEED := 140.0  # pixels per second: how fast a Move gets things going, against drag
 const MOVE_FORCE := Simulation.DRAG * MOVE_SPEED
+## While Move pushes, its drain is scaled by the weight it pushes, in units
+## of this much (a player): a stone costs about three times as much, fire
+## next to nothing. While it has nothing to push it drains as usual.
+const MOVE_WEIGHT_UNIT := 70.0
 const ALTERNATE_TICKS := 3 * Simulation.TICK_RATE  # longest turn in an Alternate
 
 var ast: Dictionary
@@ -136,7 +140,7 @@ func tick(sim: Simulation) -> bool:
 		if caster.dead:
 			return false
 		host.pos = parent.pos if parent != null else caster.pos
-	if not _pay(1):
+	if ast["verb"] != "move" and not _pay(1):  # Move pays by the weight it pushes
 		return false
 
 	match ast["verb"]:
@@ -182,7 +186,7 @@ func tick(sim: Simulation) -> bool:
 
 ## Takes `times` ticks' worth of drain; false if the mana isn't there. A spell
 ## an Alternate cast from a slot is paid for by the Alternate.
-func _pay(times: int) -> bool:
+func _pay(times: float) -> bool:
 	if times <= 0 or paid_by_parent:
 		return true
 	for c in _drain:
@@ -229,12 +233,12 @@ func _tick_move(sim: Simulation) -> bool:
 	var subjects := _capped(_eval(_what))
 	var dests := _eval(_to)
 	if subjects.is_empty() or dests.is_empty():
-		return true  # nothing to move, or nowhere to move it, yet: wait
-	if not _pay(subjects.size() - 1):
-		return false
+		return _pay(1)  # nothing to move, or nowhere to move it, yet: wait
 	# A chase after another spell's target keeps going when it arrives or is
 	# blocked (it slides around what blocks it); other moves are done then.
 	var chasing: bool = not _to["chain"].is_empty()
+	var pushes := []  # [object, direction]
+	var weight := 0.0
 	for s in subjects:
 		var dest := _nearest(dests, s)
 		if dest == null or (_done.has(s) and not chasing):
@@ -249,9 +253,14 @@ func _tick_move(sim: Simulation) -> bool:
 		if s.blocked or gap <= maxf(coast, 0.5):
 			_done[s] = true
 			continue
+		pushes.append([s, dir])
+		weight += s.mass
+	if not _pay(weight / MOVE_WEIGHT_UNIT if not pushes.is_empty() else 1.0):
+		return false
+	for p in pushes:
 		# A push, so several Moves on one object combine, and heavy things
 		# take longer to get going.
-		s.force += dir * MOVE_FORCE
+		p[0].force += p[1] * MOVE_FORCE
 	return chasing or not subjects.all(func(s: WorldObject) -> bool: return _done.has(s))
 
 

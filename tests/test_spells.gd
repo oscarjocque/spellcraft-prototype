@@ -54,6 +54,11 @@ func run(sim: Simulation, ticks: int) -> void:
 		sim.step()
 
 
+func plenty_of_fuel(spell_host: WorldObject) -> void:
+	for c in spell_host.spell.mana:
+		spell_host.spell.mana[c] = 1000.0
+
+
 func count(sim: Simulation, qualifier: String) -> int:
 	return sim.objects.filter(func(o: WorldObject) -> bool: return o.matches(qualifier)).size()
 
@@ -151,6 +156,7 @@ func test_held_selector_tracks() -> void:
 	var selector := sim.cast(p, {"verb": "select", "qualifier": "player"}, Vector2(900, 100))
 	check(selector.spell.anchored and selector.pos == p.pos, "A bare selector stays attached to its caster")
 	var mover := sim.cast(p, with_chosen({"verb": "move", "what": {"closest": "stone"}, "to": {"target_of": {"ref": "chosen"}}}, [selector.id]), Vector2.ZERO)
+	plenty_of_fuel(mover)  # this is about tracking, not what pushing a stone costs
 	run(sim, 10)
 	check(selector.spell.target() == a, "Held selector picks the player nearest its caster, never the caster")
 	check(heading(stone).dot(stone.pos.direction_to(a.pos)) > 0.95, "Stone chases the held selector's pick")
@@ -181,6 +187,7 @@ func test_tracking_gets_around_stone() -> void:
 	var target := sim.spawn(Materials.make_player(Vector2(900, 360)))
 	var selector := sim.cast(p, {"verb": "select", "qualifier": "player"}, Vector2.ZERO)
 	var mover := sim.cast(p, with_chosen({"verb": "move", "what": {"closest": "stone"}, "to": {"target_of": {"ref": "chosen"}}}, [selector.id]), Vector2.ZERO)
+	plenty_of_fuel(mover)  # this is about tracking, not what pushing a stone costs
 	run(sim, 8 * Simulation.TICK_RATE)
 	check(not mover.dead, "A chase doesn't end when stone blocks it")
 	check(stone.pos.distance_to(target.pos) < stone.radius + target.radius + 4, "It slides around the stone and reaches its target")
@@ -214,6 +221,7 @@ func test_destroying_selector_cuts_off_spell() -> void:
 	sim.spawn(Materials.make_player(Vector2(900, 150)))
 	var selector := sim.cast(p, {"verb": "select", "qualifier": "player"}, Vector2(900, 100))
 	var mover := sim.cast(p, with_chosen({"verb": "move", "what": {"closest": "stone"}, "to": {"target_of": {"ref": "chosen"}}}, [selector.id]), Vector2.ZERO)
+	plenty_of_fuel(mover)  # this is about tracking, not what pushing a stone costs
 	run(sim, 3)
 	selector.health = 0
 	run(sim, 3)
@@ -1179,7 +1187,8 @@ func test_preview() -> void:
 	var found := SpellPreview.targets(sim, p, ast, Vector2(600, 360))
 	check(found["what"] == [near] and found["to"] == [dummy], "The preview finds what the spell would act on")
 	check(sim.objects.size() == before and sim.tick == 0, "...without casting anything")
-	check(SpellPreview.describe(ast, found) == "acts on 1 thing now", "It says how much")
+	check(SpellPreview.describe(ast, found).begins_with("acts on 1 thing now, weighing 200: mana ×2.86"),
+		"It says how much, and what pushing that weight costs")
 	var none: Dictionary = SpellParser.parse("destroy closest fire")["ast"]
 	check(SpellPreview.describe(none, SpellPreview.targets(sim, p, none, Vector2.ZERO)).contains("wait"),
 		"...or that the spell would wait")
@@ -1404,3 +1413,24 @@ func test_momentum_carries_into_what_it_hits() -> void:
 	check(stone.velocity == Vector2.ZERO and wood.velocity == Vector2.ZERO
 		and stone.pos.distance_to(wood.pos) < stone.radius + wood.radius + 1.0,
 		"...and drag brings them to rest together")
+
+
+func test_move_costs_by_weight() -> void:
+	var drained := {}
+	for material in ["stone", "wood"]:
+		var w := world()
+		var sim: Simulation = w[0]
+		var p: WorldObject = w[1]
+		var o := sim.spawn(Materials.make(material, Vector2(300, 200)))
+		var mover := sim.cast(p, {"verb": "move", "what": {"ref": "this", "id": o.id}, "to": {"ref": "there", "at": Vector2(1100, 200)}}, Vector2.ZERO)
+		var before: float = mover.spell.mana["green"]
+		run(sim, 10)
+		drained[material] = before - mover.spell.mana["green"]
+	var ratio: float = drained["stone"] / drained["wood"]
+	check(absf(ratio - 200.0 / 30.0) < 0.05, "A Move's drain is proportional to the weight it pushes (stone/wood %.2f)" % ratio)
+	var w := world()
+	var waiting: WorldObject = w[0].cast(w[1], {"verb": "move", "what": {"closest": "stone"}, "to": {"ref": "me"}}, Vector2.ZERO)
+	var start: float = waiting.spell.mana["green"]
+	run(w[0], 10)
+	var per_second: float = SpellGrammar.drain_per_second(waiting.spell.ast)["green"]
+	check(absf(start - waiting.spell.mana["green"] - per_second * 0.5) < 0.001, "With nothing to push, it drains its listed rate")

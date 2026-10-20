@@ -48,4 +48,6 @@ static func cost(ast: Dictionary) -> String:
 			carried.append("[color=#%s]%s %d[/color]" % [WORD_COLOR[c].to_html(false), c, carry[c]])
 	if not carried.is_empty():
 		text += "  ·  carries " + " ".join(carried)
+	if ast.get("verb", "") == "move":
+		text += "  ·  [color=#8a8f98]for each %d weight pushed[/color]" % Spell.MOVE_WEIGHT_UNIT
 	return text
