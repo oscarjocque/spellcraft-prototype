@@ -52,7 +52,10 @@ const RELATIONS := ["target_of", "caster_of", "maker_of", "products_of"]
 const DISTANCES := [1, 2, 3, 5]  # meters, for "within"
 const PIXELS_PER_METER := 40.0
 const COLORS := ["red", "blue", "green", "violet"]
-const CREATED_SPELL_SECONDS := 60.0  # how long a created spell's mana must last
+## A spell holds at most this many seconds of its own drain in each color
+## (plus what it carries for the spells it creates; see `capacity`). Casting
+## fills it from storage up to that, and a created spell is given it full.
+const FULL_SECONDS := 60.0
 const CREATED_SPELLS := 3  # how many spells one Create Spell makes, unless "up to"
 const ADVERBS := ["up_to"]
 const UP_TO := [1, 2, 3, 5]
@@ -285,14 +288,28 @@ static func payload(ast: Dictionary) -> Dictionary:
 	return need
 
 
-## What one created spell is given: enough to run it for
-## CREATED_SPELL_SECONDS, plus what it must carry for its own created spells.
+## What one created spell is given: as much as it can hold (`capacity`).
 static func share(inner: Dictionary) -> Dictionary:
-	var need := payload(inner)
-	var drain := drain_per_second(inner)
-	for c in drain:
-		need[c] = need.get(c, 0.0) + drain[c] * CREATED_SPELL_SECONDS
-	return need
+	return capacity(inner)
+
+
+## The most fuel a spell holds of each color: FULL_SECONDS of its own drain.
+static func fuel_limit(ast: Dictionary) -> Dictionary:
+	var limit := drain_per_second(ast)
+	for c in limit:
+		limit[c] *= FULL_SECONDS
+	return limit
+
+
+## The most mana a spell holds of each color, in proportion to what it
+## consumes: its fuel limit, plus the reserve for the spells it creates (each
+## of them full, in turn counting what they create).
+static func capacity(ast: Dictionary) -> Dictionary:
+	var total := fuel_limit(ast)
+	var p := payload(ast)
+	for c in p:
+		total[c] = total.get(c, 0.0) + p[c]
+	return total
 
 
 ## Returns "" if the spell is grammatical, else why not. With `need_slots`

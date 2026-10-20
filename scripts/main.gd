@@ -205,9 +205,10 @@ func _describe_spell(o: WorldObject) -> String:
 		doing = "made %d" % s.created.size()
 	var mana: Array[String] = []
 	for c in SpellGrammar.COLORS:
-		if s.mana.get(c, 0.0) > 0.0:
-			mana.append("[color=#%s]%d %s[/color]" % [SpellText.WORD_COLOR[c].to_html(false), ceili(s.mana[c]), c])
-	var fuel := "paid by its Alternate" if s.paid_by_parent else "mana left " + " ".join(mana)
+		if s.fuel_limit.has(c):
+			mana.append("[color=#%s]%d/%d %s[/color]" % [SpellText.WORD_COLOR[c].to_html(false),
+				ceili(s.mana.get(c, 0.0)), roundi(s.fuel_limit[c]), c])
+	var fuel := "paid by its Alternate" if s.paid_by_parent else "mana " + " ".join(mana)
 	var number := sim.inventory(player).find(o)
 	return "[font_size=13]%s%s\n[color=#8a8f98]%s · %s[/color][/font_size]" % [
 		"[b]%d[/b]  " % (number + 1) if number >= 0 else "", SpellText.bbcode(s.ast), doing, fuel]

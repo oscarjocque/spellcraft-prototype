@@ -40,11 +40,16 @@ static func on_contact(sim: Simulation, a: WorldObject, b: WorldObject) -> void:
 			b.dead = true
 		b.statuses.erase("burning")
 
-	# A spell absorbs any mana it touches into its own fuel.
+	# A spell absorbs mana it touches into its own fuel, up to what it holds of
+	# that color (none of a color it doesn't use); the rest stays.
 	if a.spell != null and b.has_tag("mana") and not b.dead:
-		a.spell.mana[b.mana_color] = a.spell.mana.get(b.mana_color, 0.0) + b.mana_amount
-		b.mana_amount = 0.0
-		b.dead = true
+		var have: float = a.spell.mana.get(b.mana_color, 0.0)
+		var take := minf(b.mana_amount, a.spell.fuel_limit.get(b.mana_color, 0.0) - have)
+		if take > 0.0:
+			a.spell.mana[b.mana_color] = have + take
+			b.mana_amount -= take
+			if b.mana_amount <= 0.01:
+				b.dead = true
 
 	# Collectors pick up mana until their storage for that color is full.
 	if a.has_tag("collector") and b.has_tag("mana") and not b.dead:

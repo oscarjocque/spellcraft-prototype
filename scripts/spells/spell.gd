@@ -44,6 +44,7 @@ var caster: WorldObject
 var host: WorldObject
 var mana := {}  # color -> amount left
 var reserve := {}  # color -> amount carried for the spells this one creates
+var fuel_limit := {}  # color -> the most fuel it holds (see SpellGrammar.capacity)
 var anchored := true  # follows its caster (through `parent`, if it has one)
 var parent: WorldObject  # the Alternate running this spell
 var paid_by_parent := false  # a spell an Alternate cast from a slot
@@ -94,6 +95,7 @@ func _init(p_ast: Dictionary, p_caster: WorldObject, p_host: WorldObject, p_mana
 	var per_second := SpellGrammar.drain_per_second(ast)
 	for c in per_second:
 		_drain[c] = per_second[c] / Simulation.TICK_RATE
+	fuel_limit = SpellGrammar.fuel_limit(ast)
 
 
 ## Runs once at cast. Pickers inside a spell choose now, and the verb keeps
@@ -628,9 +630,7 @@ func _create_spell(sim: Simulation) -> void:
 	if pos == Vector2.INF:
 		return  # no room; try again next tick
 	var inner_reserve := SpellGrammar.payload(_inner)
-	var inner_fuel := SpellGrammar.drain_per_second(_inner)
-	for c in inner_fuel:
-		inner_fuel[c] *= SpellGrammar.CREATED_SPELL_SECONDS
+	var inner_fuel := SpellGrammar.fuel_limit(_inner)  # created full
 	var paid := SpellGrammar.share(_inner)
 	for c in paid:
 		reserve[c] = maxf(0.0, reserve.get(c, 0.0) - paid[c])

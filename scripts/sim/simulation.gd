@@ -20,7 +20,6 @@ const DRAG := 400.0
 const STOP_SPEED := 3.0  # pixels per second: slower, with nothing pushing, it stops
 const START_MANA := 30.0  # per color
 const STORE_CAP := 30.0  # storage limit per color
-const INFUSE_CAP := 10.0  # most mana of each color one cast takes from storage
 const MANA_CRYSTAL := 5.0  # mana in a naturally spawned crystal
 const MANA_SPAWN_TICKS := 3 * TICK_RATE
 const MAX_CRYSTALS := 12
@@ -216,8 +215,9 @@ func cast(caster: WorldObject, ast: Dictionary, aim: Vector2) -> WorldObject:
 	var fuel := {}
 	if caster.has_tag("infinite_mana"):
 		# Spells still get their usual mana; storage just never runs out.
-		for c in drain:
-			fuel[c] = INFUSE_CAP
+		var full := SpellGrammar.fuel_limit(ast)
+		for c in full:
+			fuel[c] = full[c]
 	else:
 		for c in SpellGrammar.COLORS:
 			var need: float = drain.get(c, 0.0) + reserve.get(c, 0.0)
@@ -226,8 +226,10 @@ func cast(caster: WorldObject, ast: Dictionary, aim: Vector2) -> WorldObject:
 				return null
 		for c in reserve:
 			caster.mana_store[c] -= reserve[c]
-		for c in drain:
-			var amount := minf(caster.mana_store[c], INFUSE_CAP)
+		# Fuel up to what the spell holds (see SpellGrammar.capacity).
+		var full := SpellGrammar.fuel_limit(ast)
+		for c in full:
+			var amount := minf(caster.mana_store[c], full[c])
 			caster.mana_store[c] -= amount
 			fuel[c] = amount
 

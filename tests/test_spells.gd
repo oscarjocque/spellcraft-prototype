@@ -269,9 +269,10 @@ func test_create_spell_pays_from_reserve() -> void:
 		p.mana_store[c] = 200.0
 	sim.spawn(Materials.make("fire", Vector2(600, 200)))
 	var parent := sim.cast(p, FIRE_WARDEN, Vector2(400, 360))
-	# Storage pays the reserve (violet 45, red 9) and then up to 10 fuel per color.
-	check(is_equal_approx(p.mana_store["violet"], 145.0), "Caster pays the created spells' mana up front")
-	check(is_equal_approx(p.mana_store["red"], 181.0), "Caster pays the created spells' red mana up front")
+	# Storage pays the reserve (violet 45, red 9), then fuel up to 60 s of the
+	# warden's own drain (create red 0.2, spell violet 0.2: 12 each).
+	check(is_equal_approx(p.mana_store["violet"], 143.0), "Caster pays the created spells' mana up front")
+	check(is_equal_approx(p.mana_store["red"], 179.0), "Caster pays the created spells' red mana up front")
 	var child: WorldObject = parent.spell.what
 	check(child != null and child.spell != null, "Create Spell puts a spell into the world")
 	check(same(child.spell.mana, {"violet": 15.0, "red": 3.0}), "The created spell's mana comes from the creator's reserve")
@@ -331,11 +332,14 @@ func test_spell_absorbs_mana() -> void:
 	var caster := sim.spawn(Materials.make_player(Vector2(900, 300)))
 	caster.tags["infinite_mana"] = true
 	var host := sim.cast(caster, {"verb": "select", "qualifier": "player"}, Vector2.ZERO)
-	var crystal := sim.spawn(Materials.make_mana("blue", 5.0, Vector2(903, 300)))
+	run(sim, 2 * Simulation.TICK_RATE)  # 0.2 of its 6 violet gone
+	var crystal := sim.spawn(Materials.make_mana("violet", 5.0, Vector2(903, 300)))
+	var blue := sim.spawn(Materials.make_mana("blue", 5.0, Vector2(897, 300)))
 	var target := sim.spawn(Materials.make_mana("red", 5.0, Vector2(600, 600)))
 	run(sim, 1)
-	check(crystal.dead, "Mana touching a spell is absorbed")
-	check(is_equal_approx(host.spell.mana.get("blue", 0.0), 5.0), "Absorbed mana joins the spell's fuel")
+	check(is_equal_approx(host.spell.mana["violet"], 6.0), "Mana touching a spell tops up its fuel, to its limit")
+	check(not crystal.dead and absf(crystal.mana_amount - 4.8) < 0.01, "...and the rest stays in the crystal")
+	check(not blue.dead and blue.mana_amount == 5.0, "A spell takes none of a color it doesn't use")
 	check(sim.closest(Vector2(600, 600), "mana", []) == target, "Mana is a qualifier spells can select")
 
 
@@ -389,7 +393,7 @@ func test_create_keeps_creating() -> void:
 	check(made.all(func(o: WorldObject) -> bool: return o.pos.distance_to(spot) < 4.0 * 22.0 + 1.0),
 		"The rest gather in the closest free spots around it, not in a line")
 	check(is_equal_approx(made[0].radius, 22.0), "Earlier objects are complete")
-	run(sim, 50 * Simulation.TICK_RATE)  # 10 red and 10 green at 0.2/s each last 50 s
+	run(sim, 56 * Simulation.TICK_RATE)  # it holds 60 s of red and green: 12 at 0.2/s
 	check(host.dead, "Create ends when its mana runs out")
 	var count_at_end := count(sim, "wood")
 	run(sim, Simulation.TICK_RATE)
@@ -400,11 +404,12 @@ func test_spells_last_longer() -> void:
 	var w := world()
 	var sim: Simulation = w[0]
 	var host := sim.cast(w[1], {"verb": "select", "qualifier": "player"}, Vector2(600, 360))
-	# Two structural words (closest, player) at 0.05/s each: 10 mana lasts 100 s.
-	run(sim, 95 * Simulation.TICK_RATE)
-	check(not host.dead, "A Hold of 2 words with 10 mana runs for 95 s")
-	run(sim, 6 * Simulation.TICK_RATE)
-	check(host.dead, "...and ends when its mana runs out, at 100 s")
+	# Two structural words (closest, player) at 0.05/s: it holds 60 s of that, 6 violet.
+	check(is_equal_approx(host.spell.mana["violet"], 6.0), "A spell holds 60 s of its own drain")
+	run(sim, 58 * Simulation.TICK_RATE)
+	check(not host.dead, "A Hold of 2 words runs for 58 s")
+	run(sim, 3 * Simulation.TICK_RATE)
+	check(host.dead, "...and ends when its mana runs out, at 60 s")
 
 
 const DESTROY_THIS := {"verb": "destroy", "what": {"ref": "this"}}
@@ -1649,3 +1654,25 @@ func test_cast_a_spell_as_this() -> void:
 	check(flow.picking() == "this", "A spell cast as a This can itself ask for a This")
 	flow.cancel()
 	check(flow.picking() == "this" and flow.spell()["verb"] == "destroy", "Esc cancels it, and the first cast still wants its This")
+
+
+func test_spell_mana_limits() -> void:
+	# Own fuel: 60 s of its drain (create red 0.2, spell violet 0.2), plus the
+	# reserve for its 3 Destroy (Closest Fire)s, each full (violet 15, red 3).
+	check(same(SpellGrammar.capacity(FIRE_WARDEN), {"violet": 12.0 + 45.0, "red": 12.0 + 9.0}),
+		"A spell's limit counts the spells it creates")
+	var nested := {"verb": "create", "what": {"spell": FIRE_WARDEN}, "adverbs": {"up_to": 1}}
+	check(same(SpellGrammar.capacity(nested), {"violet": 12.0 + 57.0, "red": 12.0 + 21.0, "blue": 3.0}),
+		"...and what those create in turn")
+	var w := world()
+	var sim: Simulation = w[0]
+	var p: WorldObject = w[1]
+	for c in SpellGrammar.COLORS:
+		p.mana_store[c] = 30.0
+	var hold := sim.cast(p, {"verb": "select", "what": {"closest": "player"}}, Vector2.ZERO)
+	check(same(hold.spell.mana, {"violet": 6.0}) and p.mana_store["violet"] == 24.0,
+		"Casting fills a spell from storage only up to its limit")
+	p.mana_store["green"] = 18.0
+	var big := sim.cast(p, {"verb": "move", "what": {"all": "stone", "adj": ["moving", "mine"]}, "to": {"closest": "wood", "within": 3, "from": {"ref": "here"}}}, Vector2.ZERO)
+	check(big.spell.mana["green"] == 18.0 and is_equal_approx(big.spell.fuel_limit["green"], 30.0),
+		"...or what storage has, if that's less")
