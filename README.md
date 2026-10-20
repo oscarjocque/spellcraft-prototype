@@ -26,7 +26,8 @@ selector are enough to build spells that interact in ways nobody scripted.
 | Esc | Cancel a cast that is waiting for picks (a right click does too), or close the typing bar |
 | Space | Drop one of your attached spells (pick it in a window, or click it by you) |
 | F1 | Show every word, colored by mana, with typed examples |
-| R | Reset the sandbox |
+| F2 | Next level (the sandbox, then levels 1–3, then the sandbox again) |
+| R | Restart the sandbox or level |
 
 ### Making spells fast
 
@@ -72,10 +73,28 @@ Clicking into the text selects it, so typing replaces the spell, and
 slots are saved (in Godot's user folder) and come back next time; the
 spellbook's "Reset all ten to the presets" brings the presets back.
 
-For now the player has **infinite mana**: casting never takes from storage,
-but each spell still gets its usual fuel and reserve. To turn it off, remove
-the `infinite_mana` tag in `scripts/sandbox.gd`. Then walk over the colored
-diamonds to collect mana.
+In the sandbox the player has **infinite mana**: casting never takes from
+storage, but each spell still gets its usual fuel and reserve. To turn it
+off, remove the `infinite_mana` tag in `scripts/sandbox.gd`. Then walk over
+the colored diamonds to collect mana. **Fountains**, one per color, well up a
+crystal of their color every 2 s (keeping up to 3 around them); they can't
+be moved by spells or by what runs into them, but they are Things.
+
+### Levels
+
+**F2** goes from the sandbox through three test levels, each needing more
+spellcraft than the last; mana is real there, so fountains matter. The goal
+and how it's going show at the top; **R** restarts.
+
+1. **Onto the pad**: get a stone onto the gold pad. One spell, with picks:
+   `move stone to there`, clicking the pad.
+2. **Clear the ring**: get every log out of the gold ring. Pickers and Away
+   from: `move all logs within 3 of there away from there`, clicking the
+   middle (or one spell per log).
+3. **Firebreak**: fires creep in on a wooden house from every side, a new one
+   every 3 s; keep 2 of its 3 logs for 40 s. Casting `destroy fire` by hand
+   works if you keep it up every couple of seconds; a live tracker does it in
+   two casts: `hold all fire`, then `destroy target of chosen` picking it.
 
 ## What's in Prototype 1
 
@@ -87,7 +106,8 @@ diamonds to collect mana.
 | Pickers | Closest, Farthest, Random, All |
 | Adjectives | Moving, Burning, Mine, Theirs, Marked |
 | Picked when casting | Chosen *(an attached spell)*, This *(click an object)*, There *(click a place)* |
-| Other nouns | Me, Here *(the spell's location)*, Aimed, It *(inside an Alternate)* |
+| Other nouns | Me, Here *(the spell's location)*, Aimed, It *(inside an Alternate)*, Self *(the spell itself)* |
+| Connectives | Move … to …, Move … away from … |
 | Adverbs | up to N *(1, 2, 3 or 5)* |
 | Relations | Target of, Caster of, Maker of, Products of |
 
@@ -183,6 +203,14 @@ game keeps running: it stays where it is, stops following you, and leaves
 your inventory. Since it's no longer attached to you, its pickers can pick
 you, and its Here is where you dropped it. A Move whose destination is another spell's target keeps chasing: it
 doesn't end when it arrives or is blocked, and slides around obstacles.
+
+### Away from and Self
+
+**Move** *X* **away from** *Y* pushes *X* straight away from *Y* until it's
+5 m off (letting go in time to coast the rest), or until something stops it;
+`push X` is Move X away from Me. **Self** is the spell itself, as an object:
+`Destroy Self` ends it, and `Move Self to There` sends the spell there (a
+spell moving itself leaves its caster, so it stops following them).
 
 ### Mark
 
@@ -327,7 +355,7 @@ constants at the top of each script.
 - **Create places its object in front of the caster**, toward the cursor, so it needs no Where.
 - **Create keeps creating until its mana runs out.** Each new object goes in the free spot closest to where Create aims: just in front of you toward where you cast, or with *at*, right in front of what it's at (on it, for There). Spots are tried outward from there, your side first, so objects gather around that point, and a gap (an object destroyed or pushed away) is refilled first. With no free spot within reach (6 object widths), Create waits. While the spell lasts it sustains everything it made, so fire doesn't burn out. Building takes about 1.5 s for wood and 1 s for fire. Created objects stay after the spell ends, though fire then burns out after 10 s.
 - **Mana storage is a limit per color** (30), and players start full. A cast infuses at most 10 of each color it needs.
-- **Every block drains 0.2 mana per second** of its color, so a typical spell runs for 25–50 s. Colors follow the design doc's first sketch, and Wood, Me, It and Mana have colors assigned here.
+- **Blocks that change the world drain 0.2 mana per second** of their color (verbs, and what Create makes), **structural blocks 0.05** (pickers, things picked, adjectives, nouns, relations, within, at, away from, up to): a typical spell runs for 30–60 s, and a Hold, which changes nothing, is cheap. Colors follow the design doc's first sketch, and Wood, Me, It and Mana have colors assigned here.
 - **Mana can be selected and moved but not created.** Create Mana would produce mana for less than it yields.
 - **Mana crystals regrow:** one random crystal appears every 3 s, up to 12 in the world.
 - **Picks are stored in the spell.** What you click for This and There, and pick for Chosen, is written into the cast spell, so the server can check it: Chosen must be one of your attached spells, This an existing object, There inside the arena.

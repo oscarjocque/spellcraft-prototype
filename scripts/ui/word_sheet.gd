@@ -10,15 +10,15 @@ const GROUPS := [
 		"a thing on its own means the closest one"],
 	["Pickers", ["closest", "farthest", "random", "all"], ""],
 	["Adjectives", ["moving", "burning", "mine", "theirs", "marked"], "go before the thing"],
-	["Nouns", ["me", "here", "aimed", "this", "there", "chosen", "it"],
-		"This, There: the mouse · Chosen: an attached spell · It: in Alternate"],
+	["Nouns", ["me", "here", "aimed", "this", "there", "chosen", "it", "self"],
+		"This, There: the mouse · Chosen: an attached spell · It: in Alternate · Self: the spell"],
 	["Of", ["target_of", "caster_of", "maker_of", "products_of"], "followed by a noun"],
-	["Extras", ["within", "from", "at", "up_to"], "within 3 m (of …)  ·  to …  ·  Create … at …  ·  …, up to 2"],
+	["Extras", ["within", "from", "away", "at", "up_to"], "Move … away from …  ·  Create … at …  ·  …, up to 2"],
 ]
 const EXAMPLES := [
 	"mo st", "de", "destroy all fires within 3 of here", "create fire at there",
 	"move this to there", "mark all moving stones, up to 2", "closest player",
-	"move stone to target of chosen", "create spell [destroy fire]", "alternate 5 6", "mvoe stoen to me",
+	"move stone to target of chosen", "create spell [destroy fire]", "alternate 5 6", "move all logs away from there",
 	"pull the nearest rock",
 ]
 
@@ -55,14 +55,14 @@ func toggle() -> void:
 
 static func _build() -> String:
 	var grey := SpellText.FREE_COLOR.to_html(false)
-	var out := "[b]Words[/b]   [color=#%s]colored by the mana they cost · F1 closes[/color]\n\n" % grey
+	var out := "[b]Words[/b]   [color=#%s]colored by the mana they cost (verbs, and what Create makes, cost 4x the rest) · F1 closes[/color]\n\n" % grey
 	for group in GROUPS:
 		var words: Array[String] = []
 		for w in group[1]:
 			if w == "":
 				words.append("[color=#%s]hold[/color]" % grey)
 			else:
-				var label: String = {"within": "within N m", "from": "to / of", "up_to": "up to N"}.get(w,
+				var label: String = {"within": "within N m", "from": "to / of", "away": "away from", "up_to": "up to N"}.get(w,
 						w.replace("_", " "))
 				words.append("[color=#%s]%s[/color]" % [SpellText.color_of(w).to_html(false), label])
 		out += "[b]%s[/b]   %s" % [group[0], "   ".join(words)]

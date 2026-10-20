@@ -251,10 +251,11 @@ const FIRE_WARDEN := {"verb": "create", "what": {"spell": {"verb": "destroy", "w
 
 
 func test_payload() -> void:
-	# Each of the warden's 3 spells gets 60 s of Destroy (Closest Fire) at
-	# 0.2/s per word: destroy + closest (violet) and fire (red).
-	check(same(SpellGrammar.share(FIRE_WARDEN["what"]["spell"]), {"violet": 24.0, "red": 12.0}), "A share runs one created spell")
-	check(same(SpellGrammar.payload(FIRE_WARDEN), {"violet": 72.0, "red": 36.0}), "Payload covers every created spell")
+	# Each of the warden's 3 spells gets 60 s of Destroy (Closest Fire): destroy
+	# changes the world (violet 0.2/s), closest and fire only structure the
+	# sentence (violet and red 0.05/s).
+	check(same(SpellGrammar.share(FIRE_WARDEN["what"]["spell"]), {"violet": 15.0, "red": 3.0}), "A share runs one created spell")
+	check(same(SpellGrammar.payload(FIRE_WARDEN), {"violet": 45.0, "red": 9.0}), "Payload covers every created spell")
 	check(same(SpellGrammar.drain_per_second(FIRE_WARDEN), {"red": 0.2, "violet": 0.2}), "Creator drains only its own words")
 	check(SpellGrammar.blocks(FIRE_WARDEN).size() == 5, "Words include the created spell's")
 	check(SpellGrammar.to_text(FIRE_WARDEN) == "Create Spell [Destroy (Closest Fire)].", "Created spell reads inside brackets")
@@ -268,13 +269,13 @@ func test_create_spell_pays_from_reserve() -> void:
 		p.mana_store[c] = 200.0
 	sim.spawn(Materials.make("fire", Vector2(600, 200)))
 	var parent := sim.cast(p, FIRE_WARDEN, Vector2(400, 360))
-	# Storage pays the reserve (violet 72, red 36) and then up to 10 fuel per color.
-	check(is_equal_approx(p.mana_store["violet"], 118.0), "Caster pays the created spells' mana up front")
-	check(is_equal_approx(p.mana_store["red"], 154.0), "Caster pays the created spells' red mana up front")
+	# Storage pays the reserve (violet 45, red 9) and then up to 10 fuel per color.
+	check(is_equal_approx(p.mana_store["violet"], 145.0), "Caster pays the created spells' mana up front")
+	check(is_equal_approx(p.mana_store["red"], 181.0), "Caster pays the created spells' red mana up front")
 	var child: WorldObject = parent.spell.what
 	check(child != null and child.spell != null, "Create Spell puts a spell into the world")
-	check(same(child.spell.mana, {"violet": 24.0, "red": 12.0}), "The created spell's mana comes from the creator's reserve")
-	check(same(parent.spell.reserve, {"violet": 48.0, "red": 24.0}), "One share of the reserve is handed over")
+	check(same(child.spell.mana, {"violet": 15.0, "red": 3.0}), "The created spell's mana comes from the creator's reserve")
+	check(same(parent.spell.reserve, {"violet": 30.0, "red": 6.0}), "One share of the reserve is handed over")
 	check(not child.spell.anchored and child.pos.x > p.pos.x, "The created spell sits in front of the caster")
 	run(sim, 10)
 	check(count(sim, "fire") == 0, "The created spell does its job")
@@ -359,7 +360,7 @@ func test_infinite_mana() -> void:
 	check(host != null, "Infinite mana casts with empty storage")
 	check(p.mana_store["violet"] == 0.0, "Infinite mana takes nothing from storage")
 	var child: WorldObject = host.spell.what
-	check(same(child.spell.mana, {"violet": 24.0, "red": 12.0}), "Spells still get their usual mana and reserve")
+	check(same(child.spell.mana, {"violet": 15.0, "red": 3.0}), "Spells still get their usual mana and reserve")
 
 
 func test_create_sustains_its_objects() -> void:
@@ -399,10 +400,11 @@ func test_spells_last_longer() -> void:
 	var w := world()
 	var sim: Simulation = w[0]
 	var host := sim.cast(w[1], {"verb": "select", "qualifier": "player"}, Vector2(600, 360))
-	run(sim, 20 * Simulation.TICK_RATE)
-	check(not host.dead, "A 2-word spell with 10 mana runs for 20 s")
+	# Two structural words (closest, player) at 0.05/s each: 10 mana lasts 100 s.
+	run(sim, 95 * Simulation.TICK_RATE)
+	check(not host.dead, "A Hold of 2 words with 10 mana runs for 95 s")
 	run(sim, 6 * Simulation.TICK_RATE)
-	check(host.dead, "...and ends when its mana runs out, at 25 s")
+	check(host.dead, "...and ends when its mana runs out, at 100 s")
 
 
 const DESTROY_CHOSEN := {"verb": "destroy", "what": {"ref": "chosen"}}
@@ -500,7 +502,7 @@ func test_create_spell_makes_several() -> void:
 		and made.all(func(o: WorldObject) -> bool: return o.pos.distance_to(made[0].pos) <= Spell.CREATED_SPELL_SPACING + 0.1),
 		"They take separate spots, close together")
 	for o in made:
-		check(not o.dead and o.spell.mana["violet"] > 23.0, "Each created spell got a full share")
+		check(not o.dead and o.spell.mana["violet"] > 5.5, "Each created spell got a full share")
 	check(maker.spell.reserve.values().all(func(v: float) -> bool: return v < 0.001), "The whole reserve went to them")
 
 
@@ -933,7 +935,7 @@ func test_up_to() -> void:
 
 	var warden := {"verb": "create", "what": {"spell": {"verb": "select", "what": {"closest": "player"}}}, "adverbs": {"up_to": 5}}
 	check(SpellGrammar.spells_created(warden) == 5, "Create Spell up to 5 makes 5 spells")
-	check(same(SpellGrammar.payload(warden), {"violet": 5 * 0.4 * 60.0}), "...and carries mana for 5")
+	check(same(SpellGrammar.payload(warden), {"violet": 5 * 0.1 * 60.0}), "...and carries mana for 5")
 
 	sim.spawn(Materials.make("stone", Vector2(400, 300)))
 	sim.spawn(Materials.make("stone", Vector2(400, 420)))
@@ -1434,3 +1436,97 @@ func test_move_costs_by_weight() -> void:
 	run(w[0], 10)
 	var per_second: float = SpellGrammar.drain_per_second(waiting.spell.ast)["green"]
 	check(absf(start - waiting.spell.mana["green"] - per_second * 0.5) < 0.001, "With nothing to push, it drains its listed rate")
+
+
+func test_structural_words_cost_less() -> void:
+	var drain := SpellGrammar.drain_per_second({"verb": "move", "what": {"closest": "stone"}, "to": {"ref": "me"}})
+	# move (world, green 0.2) + closest (violet), stone (green), me (violet) at 0.05
+	check(same(drain, {"green": 0.25, "violet": 0.1}), "Words that change the world cost 4x the ones that structure the sentence")
+	check(same(SpellGrammar.drain_per_second({"verb": "create", "what": {"material": "fire"}, "at": {"ref": "there"}}),
+		{"red": 0.45, "green": 0.05}), "What Create makes changes the world; where it makes it doesn't")
+	check(same(SpellGrammar.drain_per_second({"verb": "select", "what": {"closest": "player"}}), {"violet": 0.1}),
+		"A Hold only structures: it's cheap")
+
+
+func test_move_away_from() -> void:
+	check(SpellGrammar.to_text(SpellParser.parse("move stone away from me")["ast"]) == "Move (Closest Stone) away from Me.",
+		"Move ... away from ... reads")
+	check(SpellParser.parse("push the rock")["ast"] == {"verb": "move", "what": {"closest": "stone"}, "to": {"ref": "me"}, "away": true},
+		"push X is Move X away from Me")
+	var w := spell_world()
+	var sim: Simulation = w[0]
+	var p: WorldObject = w[1]
+	var wood := sim.spawn(Materials.make("wood", Vector2(p.pos.x + 80, p.pos.y)))
+	var spell := sim.cast(p, {"verb": "move", "what": {"ref": "this", "id": wood.id}, "to": {"ref": "me"}, "away": true}, Vector2.ZERO)
+	run(sim, 6 * Simulation.TICK_RATE)
+	var gap := wood.pos.distance_to(p.pos) - wood.radius - p.radius
+	check(spell.dead and absf(gap - Spell.AWAY_DISTANCE) < 8.0,
+		"It pushes the thing away until it's 5 m off, then ends (gap %d)" % gap)
+
+
+func test_self() -> void:
+	check(SpellGrammar.to_text(SpellParser.parse("move self to there")["ast"]) == "Move Self to There.", "Self is a noun")
+	var w := spell_world()
+	var sim: Simulation = w[0]
+	var p: WorldObject = w[1]
+	var spot := Vector2(700, 200)
+	var host := sim.cast(p, {"verb": "move", "what": {"ref": "self"}, "to": {"ref": "there", "at": spot}}, Vector2.ZERO)
+	run(sim, 6 * Simulation.TICK_RATE)
+	check(not host.spell.anchored and host.pos.distance_to(spot) < 15.0, "A spell moving itself leaves its caster and goes there")
+	var doomed := sim.cast(p, {"verb": "destroy", "what": {"ref": "self"}}, Vector2.ZERO)
+	run(sim, 4)
+	check(doomed.dead, "Destroy Self ends itself")
+
+
+func test_fountains() -> void:
+	var w := spell_world()
+	var sim: Simulation = w[0]
+	var p: WorldObject = w[1]
+	var fountain := sim.spawn(Materials.make_fountain("blue", Vector2(600, 360)))
+	run(sim, 10 * Simulation.TICK_RATE)
+	var crystals := sim.objects.filter(func(o: WorldObject) -> bool:
+		return o.has_tag("mana") and o.pos.distance_to(fountain.pos) <= Simulation.FOUNTAIN_REACH)
+	check(crystals.size() == Simulation.FOUNTAIN_POOL and crystals.all(func(o: WorldObject) -> bool: return o.mana_color == "blue"),
+		"A fountain wells up crystals of its color, a few at a time")
+	var spell := sim.cast(p, {"verb": "move", "what": {"ref": "this", "id": fountain.id}, "to": {"ref": "me"}}, Vector2.ZERO)
+	var stone := sim.spawn(Materials.make("stone", Vector2(500, 360)))
+	stone.velocity = Vector2(Spell.MOVE_SPEED, 0)
+	run(sim, 2 * Simulation.TICK_RATE)
+	check(fountain.pos == Vector2(600, 360), "Fountains can't be moved, by spells or by what hits them")
+	check(stone.pos.x < 600 - fountain.radius - stone.radius + 1.0, "...and stop what runs into them")
+	check(spell != null, "(setup)")
+
+
+## Plays `level` with `casts` ([tick, typed spell, where There is]; Chosen is
+## the caster's first attached spell) and returns its result.
+func play_level(level: int, casts: Array, seconds: float) -> String:
+	var sim := Simulation.new()
+	var state := {}
+	var p := Levels.build(level, sim, state)
+	var queue := casts.duplicate()
+	for i in int(seconds * Simulation.TICK_RATE):
+		var cmd := {}
+		if not queue.is_empty() and queue[0][0] <= i:
+			var c: Array = queue.pop_front()
+			var ast: Dictionary = SpellParser.parse(c[1])["ast"]
+			for n in SpellGrammar.cast_picks(ast):
+				if n["ref"] == "there":
+					n["at"] = c[2]
+				elif n["ref"] == "chosen":
+					n["id"] = sim.inventory(p)[0].id
+			cmd = {"cast": ast, "aim": c[2]}
+		sim.step({0: cmd})
+		Levels.step(level, sim, state)
+		if state["result"] != "":
+			return state["result"]
+	return ""
+
+
+func test_levels() -> void:
+	check(play_level(1, [[0, "move stone to there", Levels.PAD]], 20) == "won", "Level 1: one Move to There wins")
+	check(play_level(1, [], 10) == "", "...and the pad doesn't fill itself")
+	check(play_level(2, [[0, "move all logs within 3 of there away from there", Levels.RING]], 20) == "won",
+		"Level 2: Move (All Wood within 3 m of There) away from There wins")
+	check(play_level(3, [], 45) == "lost", "Level 3: left alone, the house burns")
+	check(play_level(3, [[0, "hold all fire", Vector2.ZERO], [2, "destroy target of chosen", Vector2.ZERO]], 45) == "won",
+		"...and a live tracker saves it in two casts")

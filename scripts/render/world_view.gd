@@ -34,6 +34,7 @@ var alpha := 1.0  # 0..1 progress from the last tick to the next
 ## What a spell being typed would act on (see SpellPreview), and its verb.
 var preview := {}
 var preview_verb := ""
+var zones := []  # a level's goal areas: [center, radius]
 
 var _spell_at := {}  # spell host -> where it's drawn this frame
 var _flashes := []  # [position, color, msec started]
@@ -45,6 +46,9 @@ func _process(_delta: float) -> void:
 
 func _draw() -> void:
 	draw_rect(Simulation.ARENA, BACKGROUND)
+	for z in zones:
+		draw_circle(z[0], z[1], Color(0.95, 0.8, 0.3, 0.08))
+		draw_arc(z[0], z[1], 0, TAU, 64, Color("ffd34d"), 2.0)
 	if sim == null:
 		return
 	_place_spells()
@@ -53,6 +57,8 @@ func _draw() -> void:
 			_draw_spell(o)
 		elif o.has_tag("mana"):
 			_draw_diamond(_p(o), o.radius, MANA_COLOR[o.mana_color])
+		elif o.has_tag("fountain"):
+			_draw_fountain(o)
 		elif o.has_tag("place"):
 			_draw_place(o)
 		elif o.has_tag("player"):
@@ -206,6 +212,17 @@ func _draw_diamond(p: Vector2, r: float, color: Color) -> void:
 	draw_colored_polygon(PackedVector2Array([
 		p + Vector2(0, -r), p + Vector2(r, 0), p + Vector2(0, r), p + Vector2(-r, 0),
 	]), color)
+
+
+## A fountain: a stone basin with its mana's color welling in the middle.
+func _draw_fountain(o: WorldObject) -> void:
+	var p := _p(o)
+	var color: Color = MANA_COLOR[o.mana_color]
+	draw_circle(p, o.radius, Color("3a3f48"))
+	draw_arc(p, o.radius, 0, TAU, 32, Color("5a606b"), 3.0)
+	var pulse := 0.75 + 0.25 * sin(Time.get_ticks_msec() / 400.0 + o.id)
+	draw_circle(p, o.radius * 0.62, Color(color, 0.35 * pulse))
+	_draw_diamond(p, o.radius * 0.45 * pulse, color)
 
 
 func _draw_diamond_outline(p: Vector2, r: float, color: Color) -> void:

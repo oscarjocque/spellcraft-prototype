@@ -15,6 +15,8 @@ var player: WorldObject
 var slots: Array = Spellbook.load_slots()  # saved when changed
 var selected := 0  # the slot cast last, highlighted in the HUD
 var flow := CastFlow.new()  # casts being picked for, and ready to send
+var level := 0  # 0 the sandbox, 1-3 the test levels (see Levels)
+var level_state := {}
 var _accum := 0.0
 var _dropping := false  # the picker is choosing a spell to drop
 var _pending_drop := 0  # id of a spell to drop with the next tick's command
@@ -53,7 +55,9 @@ func _ready() -> void:
 
 func _reset() -> void:
 	sim = Simulation.new()
-	player = Sandbox.build(sim)
+	level_state = {}
+	player = Levels.build(level, sim, level_state)
+	view.zones = Levels.zones(level)
 	view.sim = sim
 	_accum = 0.0
 	flow = CastFlow.new()
@@ -70,12 +74,14 @@ func _process(delta: float) -> void:
 		while _accum >= Simulation.DT:
 			_accum -= Simulation.DT
 			sim.step({player.controller: _command()})
+			Levels.step(level, sim, level_state)
 	view.alpha = _accum / Simulation.DT
 	view.preview = {}
 	var mouse := view.get_global_mouse_position()
 	var hovered := hud.slot_at(get_viewport().get_mouse_position(), slots.size()) \
 			if not (quick.visible or editor.visible or flow.busy()) else -1
 	hud.refresh(sim, player, slots, selected, _prompt(), hovered)
+	hud.show_level(Levels.NAMES[level], Levels.GOALS[level], level_state)
 	if hovered >= 0:
 		var ast := SpellGrammar.embed_slots(slots[hovered], slots, [hovered])
 		view.preview = SpellPreview.targets(sim, player, ast, mouse, false)
@@ -164,7 +170,11 @@ func _describe(o: WorldObject) -> String:
 	var kind: String = "player" if o.has_tag("player") else "mana" if o.has_tag("mana") else o.material
 	if o == player:
 		kind = "me"
-	words.append("[color=#%s]%s[/color]" % [SpellText.color_of(kind).to_html(false), kind.capitalize()])
+	if o.has_tag("fountain"):
+		words.append("[color=#%s]%s fountain[/color] [color=#8a8f98](a Thing; can't be moved)[/color]" % [
+			WorldView.MANA_COLOR[o.mana_color].to_html(false), o.mana_color.capitalize()])
+	else:
+		words.append("[color=#%s]%s[/color]" % [SpellText.color_of(kind).to_html(false), kind.capitalize()])
 	for adj in SpellGrammar.ADJECTIVES:
 		if o != player and sim.has_adjective(o, adj, player):
 			words.append("[color=#%s]%s[/color]" % [SpellText.color_of(adj).to_html(false), adj])
@@ -202,6 +212,11 @@ func _input(event: InputEvent) -> void:
 		return
 	if event.keycode == KEY_F1:
 		words.toggle()  # even while typing
+		get_viewport().set_input_as_handled()
+		return
+	if event.keycode == KEY_F2:
+		level = (level + 1) % Levels.NAMES.size()  # the next level, or back to the sandbox
+		_reset()
 		get_viewport().set_input_as_handled()
 		return
 	if get_viewport().gui_get_focus_owner() is LineEdit:

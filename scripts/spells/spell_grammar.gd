@@ -6,7 +6,7 @@ extends RefCounted
 ##   {"verb": "create", "what": {"material": "wood"}, "at": NOUN?}
 ##   {"verb": "create", "what": {"spell": SPELL}, "at": NOUN?}   # creates spells
 ##   {"verb": "destroy", "what": NOUN}
-##   {"verb": "move", "what": NOUN, "to": NOUN}
+##   {"verb": "move", "what": NOUN, "to": NOUN, "away": true?}   # away: away from NOUN
 ##   {"verb": "mark", "what": NOUN}
 ##   {"verb": "select", "what": NOUN}   # Hold: a noun on its own, re-read every tick
 ##   {"verb": "alternate", "first": ARG, "second": ARG}
@@ -19,25 +19,28 @@ extends RefCounted
 ##                marked, held, or turns of an Alternate
 ##
 ## NOUN is one of:
-##   {"ref": REF}                 Me, Here, It, Chosen, This, There, Aimed
+##   {"ref": REF}                 Me, Here, It, Chosen, This, There, Aimed, Self
 ##   {PICKER: QUALIFIER, "adj": [ADJECTIVE...]?, "within": METERS?, "from": NOUN?}
 ##                                e.g. (Closest Moving Stone within 3 m of There)
 ##   {RELATION: NOUN}             (Target of X), (Caster of X), ...
 ##
-## Here is the spell's own location (the caster's, for a spell they cast).
+## Here is the spell's own location (the caster's, for a spell they cast);
+## Self is the spell itself, as an object it can act on.
 ## It is what the other spell of an Alternate acted on in its last turn (and
 ## nothing outside an Alternate). Chosen, This and There are picked by the caster for each use when casting,
 ## and the pick is stored in the noun: "id" for Chosen and This, "at" for There.
 ## A picker inside a spell chooses once, when the spell is cast; a held one
 ## keeps choosing. Relations are re-read every tick, so (Target of Chosen),
 ## with a held noun chosen, follows whatever it holds now.
-## Every word costs mana of one color. A created spell pays its own drain:
+## Every word costs mana of one color: the words that change the world (verbs,
+## and what Create makes) the full rate, the words that only say what or
+## where a quarter of it. A created spell pays its own drain:
 ## the spell creating it must carry that mana as a reserve (see `payload`).
 
 const VERBS := ["create", "destroy", "move", "mark", "select", "alternate"]
 const MATERIALS := ["fire", "water", "wood", "stone"]
 const QUALIFIERS := ["thing", "fire", "water", "wood", "stone", "spell", "player", "mana"]
-const REFS := ["me", "here", "it", "chosen", "this", "there", "aimed"]
+const REFS := ["me", "here", "it", "chosen", "this", "there", "aimed", "self"]
 ## Refs the caster picks when casting.
 const PICKED_REFS := ["chosen", "this", "there"]
 const PICKERS := ["closest", "farthest", "random", "all"]
@@ -56,16 +59,19 @@ const BLOCK_COLOR := {
 	"create": "red", "fire": "red", "burning": "red", "at": "red",
 	"water": "blue", "mana": "blue", "up_to": "blue",
 	"move": "green", "stone": "green", "wood": "green", "moving": "green",
-	"there": "green", "here": "green", "aimed": "green", "within": "green", "from": "green",
+	"there": "green", "here": "green", "aimed": "green", "within": "green", "from": "green", "away": "green",
 	"destroy": "violet", "mark": "violet", "alternate": "violet", "it": "violet", "spell": "violet", "player": "violet", "thing": "violet",
 	"closest": "violet", "farthest": "violet", "random": "violet", "all": "violet",
-	"me": "violet", "chosen": "violet", "this": "violet",
+	"me": "violet", "chosen": "violet", "this": "violet", "self": "violet",
 	"mine": "violet", "theirs": "violet", "marked": "violet",
 	"target_of": "violet", "caster_of": "violet", "maker_of": "violet", "products_of": "violet",
 }
 
-## Mana per second each block drains while its spell is active.
+## Mana per second each block drains while its spell is active: a block that
+## changes the world (a verb, or what Create makes), and one that only
+## structures the sentence (which thing, where, how many).
 const DRAIN_PER_BLOCK := 0.2
+const STRUCTURAL_DRAIN := 0.05
 
 
 ## The noun a held spell holds. (Older spells wrote {"qualifier": Q}.)
@@ -181,6 +187,8 @@ static func own_blocks(ast: Dictionary) -> Array[String]:
 		"move":
 			out.append("move")
 			_noun_blocks(ast["what"], out)
+			if ast.get("away", false):
+				out.append("away")
 			_noun_blocks(ast["to"], out)
 		"select":
 			_noun_blocks(held_noun(ast), out)
@@ -232,8 +240,28 @@ static func drain_per_second(ast: Dictionary) -> Dictionary:
 	var drain := {}
 	for b in own_blocks(ast):
 		var c: String = BLOCK_COLOR[b]
-		drain[c] = drain.get(c, 0.0) + DRAIN_PER_BLOCK
+		drain[c] = drain.get(c, 0.0) + STRUCTURAL_DRAIN
+	for b in world_blocks(ast):
+		var c: String = BLOCK_COLOR[b]
+		drain[c] += DRAIN_PER_BLOCK - STRUCTURAL_DRAIN
 	return drain
+
+
+## The spell's own blocks that change the world: its verbs (an Alternate's
+## too) and what Create makes. The rest only structure the sentence.
+static func world_blocks(ast: Dictionary) -> Array[String]:
+	var out: Array[String] = []
+	match ast.get("verb", ""):
+		"create":
+			out.append("create")
+			out.append("spell" if ast["what"].has("spell") else ast["what"]["material"])
+		"destroy", "mark", "move":
+			out.append(ast["verb"])
+		"alternate":
+			out.append("alternate")
+			for arg in [ast["first"], ast["second"]]:
+				out.append_array(world_blocks(arg_spell(arg)))
+	return out
 
 
 ## Mana a spell must carry in reserve for the spells it creates: one `share`
@@ -291,7 +319,9 @@ static func validate(ast: Dictionary, need_slots := true) -> String:
 				return "%s needs something to act on." % verb.capitalize()
 		"move":
 			if not (_valid_noun(ast.get("what")) and _valid_noun(ast.get("to"))):
-				return "Move needs something to move and somewhere to move it."
+				return "Move needs something to move and somewhere to move it (or to move it away from)."
+			if not ast.get("away", false) is bool:
+				return "Move's away must be true or false."
 		"select":
 			if not _valid_noun(held_noun(ast)):
 				return "Hold needs something to hold."
@@ -416,7 +446,10 @@ static func _sentence_segments(ast: Dictionary, out: Array) -> void:
 		"move":
 			out.append(["Move", "move"])
 			_noun_segments(ast["what"], out)
-			out.append(["to", ""])
+			if ast.get("away", false):
+				out.append(["away from", "away"])
+			else:
+				out.append(["to", ""])
 			_noun_segments(ast["to"], out)
 		"select":
 			out.append(["Hold", ""])

@@ -11,7 +11,8 @@ const TYPED := ["mo st me", "destroy all fires within 3 of here, up to 2", "crea
 	"create spell [destroy fire]", "alternate 5 chosen", "create wood at aimed", "hold all things within 2 of me",
 	"destroy products of chosen", "move all players to farthest stone", "mark random burning thing",
 	"de", "mo st", "mvoe stoen to me", "hold", "create fire at there", "move to me",
-	"kill the nearest rock", "pull stone", "make a fire", "tag everything within 3 of me"]
+	"kill the nearest rock", "pull stone", "make a fire", "tag everything within 3 of me",
+	"push stone", "move all logs within 3 of there away from there", "move self to there", "destroy self"]
 func _initialize():
 	rng.seed = 7
 	Spellbook.path = "user://soak_spellbook.txt"  # leave the real spellbook alone
@@ -66,6 +67,9 @@ func _process(_d):
 				a[0].id_pressed.emit(a[1])
 	elif f % 251 == 10:
 		main.editor.hide()
+	if f % 700 == 350:
+		main.level = (main.level + 1) % Levels.NAMES.size()  # play the levels too
+		main._reset()
 	if f % 3 == 0:
 		main.player.pos += Vector2(rng.randf_range(-6, 6), rng.randf_range(-6, 6))
 	if f == 3000:

@@ -20,12 +20,13 @@ extends RefCounted
 ## is read as the word it nearly is, if nothing reads without that.
 ## "A", "an" and "the" are skipped, and everyday words stand in for the
 ## spell's own: "make a fire", "kill the nearest rock", "pull stone" (Move
-## it to Me). Suggestions only offer the spell's own words.
+## it to Me), "push stone" (Move it away from Me). Suggestions only offer
+## the spell's own words.
 
 const VERB_WORDS := ["move", "create", "destroy", "mark", "hold", "alternate"]
 ## Noun words, most useful first: the order suggestions and ambiguous
 ## prefixes go by.
-const NOUN_WORDS := ["closest", "me", "this", "there", "all", "here", "aimed", "chosen", "it",
+const NOUN_WORDS := ["closest", "me", "this", "there", "all", "here", "aimed", "chosen", "it", "self",
 		"farthest", "random", "target", "caster", "maker", "products"]
 const KINDS := ["fire", "water", "wood", "stone", "spell"]
 const QUALIFIER_WORDS := ["stone", "fire", "player", "thing", "wood", "water", "spell", "mana"]
@@ -38,10 +39,10 @@ const SYNONYMS := {
 	"make": "create", "spawn": "create", "summon": "create", "conjure": "create",
 	"kill": "destroy", "break": "destroy", "remove": "destroy", "delete": "destroy",
 	"grab": "hold", "take": "hold", "select": "hold", "tag": "mark",
-	"put": "move", "send": "move", "bring": "pull",
+	"put": "move", "send": "move", "bring": "pull", "push": "pushaway",
 	"nearest": "closest", "furthest": "farthest", "every": "all", "each": "all", "any": "random",
 	"rock": "stone", "flame": "fire", "tree": "wood", "log": "wood",
-	"myself": "me", "self": "me", "my": "mine", "their": "theirs",
+	"myself": "me", "my": "mine", "their": "theirs",
 	"everything": ["all", "thing"], "something": ["random", "thing"],
 }
 
@@ -250,6 +251,11 @@ func _spell(i: int) -> Array:
 					out.append_array(_adverbs({"verb": verb, "what": n[0]}, n[1]))
 			"move":
 				for n in _object(i + 1):
+					# "away (from) X"
+					if not _word(n[1], ["away"]).is_empty():
+						var j: int = n[1] + 2 if _is(n[1] + 1, "from") else n[1] + 1
+						for d in _noun(j):
+							out.append_array(_adverbs({"verb": "move", "what": n[0], "to": d[0], "away": true}, d[1]))
 					var to := _is(n[1], "to")
 					var k: int = n[1] + 1 if to else n[1]
 					if not to:
@@ -269,6 +275,9 @@ func _spell(i: int) -> Array:
 	if _is(i, "pull"):  # Move ... to Me
 		for n in _object(i + 1):
 			out.append_array(_adverbs({"verb": "move", "what": n[0], "to": {"ref": "me"}}, n[1]))
+	if _is(i, "pushaway"):  # "push X": Move X away from Me
+		for n in _object(i + 1):
+			out.append_array(_adverbs({"verb": "move", "what": n[0], "to": {"ref": "me"}, "away": true}, n[1]))
 	# A noun on its own is a Hold.
 	for n in _noun(i):
 		out.append_array(_adverbs({"verb": "select", "what": n[0]}, n[1]))

@@ -12,7 +12,7 @@ const NOUN_GROUPS := [
 	["You", ["me", "here"]],
 	["Pick", ["closest", "farthest", "random", "all"]],
 	["Point", ["this", "there", "aimed"]],
-	["Spell", ["chosen", "it"]],
+	["Spell", ["chosen", "it", "self"]],
 	["Of", ["target_of", "caster_of", "maker_of", "products_of"]],
 ]
 
@@ -124,7 +124,10 @@ func _add_spell(ast: Dictionary) -> void:
 			_add_noun(ast["what"])
 		"move":
 			_add_noun(ast["what"])
-			_text("to")
+			_chip("away from" if ast.get("away", false) else "to", "away" if ast.get("away", false) else "", [
+				["To", func() -> void: ast.erase("away")],
+				["Away from", func() -> void: ast["away"] = true],
+			])
 			_add_noun(ast["to"])
 		"select":
 			if not ast.get("what") is Dictionary:

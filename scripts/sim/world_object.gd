@@ -16,7 +16,7 @@ var radius := 16.0
 
 # Physics
 var velocity := Vector2.ZERO  # kept from tick to tick: forces speed it up, drag slows it
-var force := Vector2.ZERO  # pushes on it this tick (Move); reset every tick
+var force := Vector2.ZERO  # pushes on it this tick (Move); cleared after every tick
 var walk := Vector2.ZERO  # a player's own walking this tick, on top of its velocity
 var mass := 1.0  # its weight: how hard it is to push, and what a Move on it costs
 var solid := false

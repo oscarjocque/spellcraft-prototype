@@ -24,6 +24,9 @@ const INFUSE_CAP := 10.0  # most mana of each color one cast takes from storage
 const MANA_CRYSTAL := 5.0  # mana in a naturally spawned crystal
 const MANA_SPAWN_TICKS := 3 * TICK_RATE
 const MAX_CRYSTALS := 12
+const FOUNTAIN_TICKS := 2 * TICK_RATE  # a fountain wells up a crystal this often
+const FOUNTAIN_POOL := 3  # while fewer than this many of its crystals lie around it
+const FOUNTAIN_REACH := 70.0
 
 var tick := 0
 var objects: Array[WorldObject] = []
@@ -61,7 +64,6 @@ func step(commands: Dictionary = {}) -> void:
 	tick += 1
 	for o in objects:
 		o.prev_pos = o.pos
-		o.force = Vector2.ZERO
 		o.walk = Vector2.ZERO
 
 	# Behaviors run on a snapshot, so whatever they spawn starts next tick.
@@ -78,6 +80,10 @@ func step(commands: Dictionary = {}) -> void:
 	_update_states()
 	_cleanup()
 	_spawn_mana()
+	# Pushes last one tick. Cleared now rather than at the start, so a push
+	# from outside the tick (a level's) counts in the next.
+	for o in objects:
+		o.force = Vector2.ZERO
 
 
 ## Spells attached to `caster`: ones they cast that follow them (not those an
@@ -264,6 +270,9 @@ func _integrate() -> void:
 	for o in objects:
 		o.blocked = false
 		o.pos += o.walk * DT
+		if o.has_tag("fixed"):
+			o.velocity = Vector2.ZERO  # nothing moves it
+			continue
 		if o.velocity == Vector2.ZERO and o.force == Vector2.ZERO:
 			continue
 		# Worked out exactly for a steady push against drag over the tick, so
@@ -295,8 +304,14 @@ func _integrate() -> void:
 		o.moved = o.pos - o.prev_pos
 
 
-## Pushes two overlapping solid objects apart. Stone that is not itself moving
-## is immovable, and anything moving into it stops dead.
+## Whether `o` can't be pushed: fixed things (fountains), and stone that
+## isn't itself moving.
+static func _immovable(o: WorldObject) -> bool:
+	return o.has_tag("fixed") or (o.material == "stone" and not o.is_moving())
+
+
+## Pushes two overlapping solid objects apart. Anything moving into something
+## immovable stops dead.
 func _separate(a: WorldObject, b: WorldObject) -> void:
 	var delta := b.pos - a.pos
 	var dist := delta.length()
@@ -306,11 +321,11 @@ func _separate(a: WorldObject, b: WorldObject) -> void:
 	var normal := delta / dist if dist > 0.001 else Vector2.RIGHT
 	var a_moving := a.is_moving()
 	var b_moving := b.is_moving()
-	if b.material == "stone" and not b_moving:
+	if _immovable(b):
 		a.pos -= normal * overlap
 		a.blocked = a_moving
 		return
-	if a.material == "stone" and not a_moving:
+	if _immovable(a):
 		b.pos += normal * overlap
 		b.blocked = b_moving
 		return
@@ -350,9 +365,9 @@ func _collide(a: WorldObject, b: WorldObject) -> void:
 		return
 	var va := a.velocity.dot(normal)
 	var vb := b.velocity.dot(normal)
-	if b.material == "stone" and not b.is_moving():
+	if _immovable(b):
 		a.velocity -= normal * maxf(va, 0.0)
-	elif a.material == "stone" and not a.is_moving():
+	elif _immovable(a):
 		b.velocity -= normal * minf(vb, 0.0)
 	else:
 		var shared := (a.mass * va + b.mass * vb) / (a.mass + b.mass)
@@ -426,6 +441,10 @@ func _release(host: WorldObject) -> Array[WorldObject]:
 
 
 func _spawn_mana() -> void:
+	if tick % FOUNTAIN_TICKS == 0:
+		for f in objects.duplicate():
+			if not f.dead and f.has_tag("fountain"):
+				_well_up(f)
 	if tick % MANA_SPAWN_TICKS != 0:
 		return
 	var count := 0
@@ -438,3 +457,16 @@ func _spawn_mana() -> void:
 	var area := ARENA.grow(-40)
 	var pos := Vector2(rng.randf_range(area.position.x, area.end.x), rng.randf_range(area.position.y, area.end.y))
 	spawn(Materials.make_mana(color, MANA_CRYSTAL, pos))
+
+
+## A fountain puts a crystal of its color just beside it, unless enough of
+## them lie around it already.
+func _well_up(fountain: WorldObject) -> void:
+	var near := 0
+	for o in objects:
+		if not o.dead and o.has_tag("mana") and o.pos.distance_to(fountain.pos) <= FOUNTAIN_REACH:
+			near += 1
+	if near >= FOUNTAIN_POOL:
+		return
+	var at := fountain.pos + Vector2.from_angle(rng.randf_range(0.0, TAU)) * (fountain.radius + 14.0)
+	spawn(Materials.make_mana(fountain.mana_color, MANA_CRYSTAL, at))

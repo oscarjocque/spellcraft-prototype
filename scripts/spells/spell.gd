@@ -37,6 +37,7 @@ const MOVE_FORCE := Simulation.DRAG * MOVE_SPEED
 ## next to nothing. While it has nothing to push it drains as usual.
 const MOVE_WEIGHT_UNIT := 70.0
 const ALTERNATE_TICKS := 3 * Simulation.TICK_RATE  # longest turn in an Alternate
+const AWAY_DISTANCE := 5.0 * SpellGrammar.PIXELS_PER_METER  # Move ... away from X: this far from X
 
 var ast: Dictionary
 var caster: WorldObject
@@ -237,22 +238,34 @@ func _tick_move(sim: Simulation) -> bool:
 	# A chase after another spell's target keeps going when it arrives or is
 	# blocked (it slides around what blocks it); other moves are done then.
 	var chasing: bool = not _to["chain"].is_empty()
+	var away: bool = ast.get("away", false)
 	var pushes := []  # [object, direction]
 	var weight := 0.0
 	for s in subjects:
 		var dest := _nearest(dests, s)
-		if dest == null or (_done.has(s) and not chasing):
+		if dest == null or (_done.has(s) and not chasing) or s.has_tag("fixed"):
 			continue
-		# Arrived means touching, so the last push always makes contact: what
-		# it moves rams into something solid at speed. Toward something that
-		# isn't solid (a place, fire) it stops pushing in time to coast to a
-		# stop there instead of past it.
 		var dir := s.pos.direction_to(dest.pos)
 		var gap := s.pos.distance_to(dest.pos) - s.radius - dest.radius
-		var coast := 0.0 if dest.solid or chasing else maxf(s.velocity.dot(dir), 0.0) * s.mass / Simulation.DRAG
-		if s.blocked or gap <= maxf(coast, 0.5):
-			_done[s] = true
-			continue
+		if away:
+			# Away from X: until it's AWAY_DISTANCE from X, letting go in time
+			# to coast the rest of the way.
+			dir = -dir if dir != Vector2.ZERO else Vector2.RIGHT
+			var coast_away := maxf(s.velocity.dot(dir), 0.0) * s.mass / Simulation.DRAG
+			if s.blocked or (gap + coast_away >= AWAY_DISTANCE and not chasing):
+				_done[s] = true
+				continue
+		else:
+			# Arrived means touching, so the last push always makes contact:
+			# what it moves rams into something solid at speed. Toward
+			# something that isn't solid (a place, fire) it stops pushing in
+			# time to coast to a stop there instead of past it.
+			var coast := 0.0 if dest.solid or chasing else maxf(s.velocity.dot(dir), 0.0) * s.mass / Simulation.DRAG
+			if s.blocked or gap <= maxf(coast, 0.5):
+				_done[s] = true
+				continue
+		if s == host:
+			anchored = false  # a spell moving itself leaves its caster to go
 		pushes.append([s, dir])
 		weight += s.mass
 	if not _pay(weight / MOVE_WEIGHT_UNIT if not pushes.is_empty() else 1.0):
@@ -467,8 +480,8 @@ func _resolve_ref(noun: Dictionary, sim: Simulation) -> WorldObject:
 	match noun["ref"]:
 		"me":
 			return caster
-		"here":
-			return host  # the spell's own world object marks where it is
+		"here", "self":
+			return host  # the spell's own world object: where it is, and itself
 		"chosen":
 			# Only a spell really in the caster's inventory counts.
 			for o in sim.inventory(caster):

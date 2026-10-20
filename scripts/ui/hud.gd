@@ -10,6 +10,7 @@ var _inventory: RichTextLabel
 var _prompt: RichTextLabel
 var _tip: RichTextLabel
 var _hint: RichTextLabel
+var _level: RichTextLabel
 var _notices := []  # [text, msec shown]: the player's own doings, e.g. saving
 var _hint_done := false
 
@@ -28,6 +29,9 @@ func _ready() -> void:
 	_hint.text = ("[color=#a7abb3]Press [b]Enter[/b], type [color=#72de8f]move stone to me[/color] and press [b]Enter[/b]; "
 			+ "or type [color=#b48cff]destroy[/color] and click a thing.\nNumber keys cast your slots, "
 			+ "[b]Tab[/b] opens your spellbook, [b]F1[/b] lists every word.[/color]")
+	_level = _make_label(Vector2(330, 8))
+	_level.size.x = 520
+	_level.horizontal_alignment = HORIZONTAL_ALIGNMENT_CENTER
 	_tip = _make_label(Vector2.ZERO)
 	_tip.size.x = 360
 
@@ -43,7 +47,8 @@ func refresh(sim: Simulation, player: WorldObject, slots: Array, selected: int, 
 	else:
 		for c in SpellGrammar.COLORS:
 			var hex: String = WorldView.MANA_COLOR[c].to_html(false)
-			mana += "[color=#%s]%s %d/%d[/color]   " % [hex, c, player.mana_store.get(c, 0.0), Simulation.STORE_CAP]
+			mana += "[color=#%s]%d[/color] " % [hex, player.mana_store.get(c, 0.0)]
+		mana += " [color=#8a8f98]of %d[/color]" % Simulation.STORE_CAP
 	var spells := 0
 	for o in sim.objects:
 		if o.spell != null:
@@ -67,7 +72,7 @@ func refresh(sim: Simulation, player: WorldObject, slots: Array, selected: int, 
 	_notices = _notices.filter(func(n: Array) -> bool: return now - n[1] < MESSAGE_SECONDS * 1000)
 	for n in _notices:
 		text += "[color=#ffd34d]%s[/color]\n" % n[0]
-	text += "[color=#8a8f98]WASD move · 1–0 cast · Shift+1–0 change, then cast · Enter type a spell · Tab spellbook · Space drop · F1 words · R reset[/color]"
+	text += "[color=#8a8f98]WASD move · 1–0 cast · Shift+1–0 change, then cast · Enter type a spell · Tab spellbook · Space drop · F1 words · F2 levels · R restart[/color]"
 	_show_text(_bottom, text)
 	# Grows up from the bottom as messages come and go.
 	_bottom.position.y = _bottom.get_viewport_rect().size.y - _bottom.get_content_height() - 8
@@ -90,6 +95,18 @@ func slot_at(at: Vector2, slot_count: int) -> int:
 		if y >= _bottom.get_line_offset(i) and y < _bottom.get_line_offset(i + 1):
 			return i
 	return -1
+
+
+## The level's name, goal and how it's going (see Levels).
+func show_level(level_name: String, goal: String, state: Dictionary) -> void:
+	var outcome := ""
+	match state.get("result", ""):
+		"won":
+			outcome = "  [color=#72de8f][b]Done![/b] F2 for the next level.[/color]"
+		"lost":
+			outcome = "  [color=#ff8a8a][b]Failed.[/b] R to try again.[/color]"
+	_show_text(_level, "[b]%s[/b]   [color=#8a8f98]%s[/color]\n[font_size=12][color=#a7abb3]%s[/color]%s[/font_size]" % [
+		level_name, state.get("status", ""), goal, outcome])
 
 
 ## Shows `text` under the slots for a few seconds.

@@ -1,7 +1,7 @@
 class_name Sandbox
 extends RefCounted
-## The prototype's test arena: a player, a training dummy, and some of every
-## material to try spells on.
+## The prototype's test arena: a player, a training dummy, some of every
+## material to try spells on, and a fountain of each mana color.
 
 const PRESETS := [
 	{"verb": "create", "what": {"material": "fire"}},
@@ -32,6 +32,10 @@ static func build(sim: Simulation) -> WorldObject:
 	sim.spawn(Materials.make("wood", Vector2(684, 620)))
 	sim.spawn(Materials.make("water", Vector2(330, 600)))
 
+	var x := 420
+	for c in SpellGrammar.COLORS:
+		sim.spawn(Materials.make_fountain(c, Vector2(x, 90)))
+		x += 140
 	var i := 0
 	for c in SpellGrammar.COLORS:
 		sim.spawn(Materials.make_mana(c, Simulation.MANA_CRYSTAL, Vector2(140 + i * 40, 120)))

@@ -71,6 +71,21 @@ static func make_place(pos: Vector2) -> WorldObject:
 	return o
 
 
+## A fountain: an unmovable well of one color of mana, welling up crystals
+## beside it for anyone to collect.
+static func make_fountain(color: String, pos: Vector2) -> WorldObject:
+	var o := WorldObject.new()
+	o.tags = {"fountain": true, "fixed": true}
+	o.pos = pos
+	o.radius = 22.0
+	o.solid = true
+	o.mass = 1000.0
+	o.health = 1000.0
+	o.max_health = 1000.0
+	o.mana_color = color
+	return o
+
+
 ## The world object a cast spell lives on.
 static func make_spell_host(pos: Vector2) -> WorldObject:
 	var o := WorldObject.new()
