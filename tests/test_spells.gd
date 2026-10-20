@@ -560,7 +560,7 @@ func test_this_picks_spells_too() -> void:
 	check(not nothing.dead and nothing.spell.target() == null, "With nothing picked, the spell waits")
 
 
-func test_each_chosen_is_picked_separately() -> void:
+func test_each_this_is_picked_separately() -> void:
 	var w := spell_world()
 	var sim: Simulation = w[0]
 	var p: WorldObject = w[1]
@@ -1076,8 +1076,7 @@ func test_parse_typed() -> void:
 		"closest player": "Hold (Closest Player).",
 		"alternate 5 6": "Alternate [spell 5] [spell 6].",
 		"alt this 0": "Alternate [This] [spell 0].",
-		"alt chosen 0": "Alternate [This] [spell 0].",
-		"move closest stone to target of chosen": "Move (Closest Stone) to (Target of This).",
+		"move closest stone to target of this": "Move (Closest Stone) to (Target of This).",
 		"mark all moving mine things": "Mark (All Moving Mine Thing).",
 		"MOVE This to THERE.": "Move This to There.",
 		"move stone to me": "Move (Closest Stone) to Me.",
@@ -1212,8 +1211,8 @@ func test_preview() -> void:
 		"The first There is the mouse")
 	var second: Dictionary = SpellParser.parse("move this to there")["ast"]
 	check(SpellPreview.targets(sim, p, second, near.pos)["to"] == null, "A second pick isn't known")
-	var old_word: Dictionary = SpellParser.parse("move chosen to there")["ast"]  # chosen: an old word for This
-	check(SpellPreview.targets(sim, p, old_word, near.pos)["to"] == null, "...even after a This")
+	var after_this: Dictionary = SpellParser.parse("move this to there")["ast"]
+	check(SpellPreview.targets(sim, p, after_this, near.pos)["to"] == null, "...even after a This")
 
 
 func test_spellbook_saves() -> void:

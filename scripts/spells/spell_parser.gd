@@ -42,7 +42,7 @@ const SYNONYMS := {
 	"put": "move", "send": "move", "bring": "pull", "push": "pushaway",
 	"nearest": "closest", "furthest": "farthest", "every": "all", "each": "all", "any": "random",
 	"rock": "stone", "flame": "fire", "tree": "wood", "log": "wood",
-	"myself": "me", "my": "mine", "chosen": "this", "that": "this", "their": "theirs",
+	"myself": "me", "my": "mine", "that": "this", "their": "theirs",
 	"everything": ["all", "thing"], "something": ["random", "thing"],
 }
 

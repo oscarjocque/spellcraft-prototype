@@ -64,7 +64,7 @@ number). Pointing at a slot's line in the list rings what it would act on
 now, and clicking it opens it in the spellbook.
 
 **Or click them together.** **Tab** opens the spellbook: your ten slots on the left,
-the chosen one on the right, where you can type it the same way or click its
+the selected one on the right, where you can type it the same way or click its
 words. Each word opens a menu of at most five choices (longer lists are split
 into submenus: Pick ▸ Closest, Farthest, Random, All), "+" adds optional parts
 (adjectives, "within", "up to", "at"), and optional parts have Remove.
@@ -379,7 +379,7 @@ constants at the top of each script.
 - **Blocks that change the world drain 0.2 mana per second** of their color (verbs, and what Create makes), **structural blocks 0.05** (pickers, things picked, adjectives, nouns, relations, within, at, away from, up to): a typical spell runs for 30–60 s, and a Hold, which changes nothing, is cheap. Colors follow the design doc's first sketch, and Wood, Me, It and Mana have colors assigned here.
 - **Mana can be selected and moved but not created.** Create Mana would produce mana for less than it yields.
 - **Mana crystals regrow:** one random crystal appears every 3 s, up to 12 in the world.
-- **Picks are stored in the spell.** What you click for This and There is written into the cast spell, so the server can check it: This must be an existing object or spell (not the spell itself; that's Self), There inside the arena. Chosen, once a separate word for your attached spells, is now part of This; typing "chosen" still works, and saved spellbooks are converted.
+- **Picks are stored in the spell.** What you click for This and There is written into the cast spell, so the server can check it: This must be an existing object or spell (not the spell itself; that's Self), There inside the arena.
 - **Spells are edited in the spellbook while the game is paused, or typed while it runs.** The word menus only offer words that fit the grammar.
 - **Objects are circles.** There are no boxes or height layers yet.
 - **Move is a force against drag** (`Simulation.DRAG`, `Spell.MOVE_SPEED`): drag is the same for every object rather than growing with weight, so every object tops out at the same speed and only heavier ones are slower to get going and to stop. Collisions are fully inelastic along the line between the two objects: no bouncing.

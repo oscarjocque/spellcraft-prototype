@@ -1,6 +1,6 @@
 class_name SpellEditor
 extends PanelContainer
-## The spellbook: the ten spell slots on the left, the chosen one on the
+## The spellbook: the ten spell slots on the left, the selected one on the
 ## right. A spell is edited by typing it (as in the quick-cast bar) or by
 ## clicking its words; either way the slot changes as soon as it reads as a
 ## spell. Number keys choose a slot while nothing is being typed, and Ctrl+Z
