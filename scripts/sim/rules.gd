@@ -28,6 +28,19 @@ static func on_impact(a: WorldObject, b: WorldObject) -> void:
 		a.health -= b.mass * closing * IMPACT_DAMAGE
 
 
+## A spell absorbs mana near it (see Simulation.ABSORB_RADIUS) into its own
+## fuel, up to what it holds of that color (none of a color it doesn't use);
+## the rest stays in the crystal.
+static func absorb(host: WorldObject, crystal: WorldObject) -> void:
+	var have: float = host.spell.mana.get(crystal.mana_color, 0.0)
+	var take := minf(crystal.mana_amount, host.spell.fuel_limit.get(crystal.mana_color, 0.0) - have)
+	if take > 0.0:
+		host.spell.mana[crystal.mana_color] = have + take
+		crystal.mana_amount -= take
+		if crystal.mana_amount <= 0.01:
+			crystal.dead = true
+
+
 ## Applies every rule where `a` acts on `b`. Called once for each order.
 static func on_contact(sim: Simulation, a: WorldObject, b: WorldObject) -> void:
 	# Fire, or anything burning, sets anything flammable it touches burning.
@@ -39,17 +52,6 @@ static func on_contact(sim: Simulation, a: WorldObject, b: WorldObject) -> void:
 		if b.material == "fire":
 			b.dead = true
 		b.statuses.erase("burning")
-
-	# A spell absorbs mana it touches into its own fuel, up to what it holds of
-	# that color (none of a color it doesn't use); the rest stays.
-	if a.spell != null and b.has_tag("mana") and not b.dead:
-		var have: float = a.spell.mana.get(b.mana_color, 0.0)
-		var take := minf(b.mana_amount, a.spell.fuel_limit.get(b.mana_color, 0.0) - have)
-		if take > 0.0:
-			a.spell.mana[b.mana_color] = have + take
-			b.mana_amount -= take
-			if b.mana_amount <= 0.01:
-				b.dead = true
 
 	# Collectors pick up mana until their storage for that color is full.
 	if a.has_tag("collector") and b.has_tag("mana") and not b.dead:

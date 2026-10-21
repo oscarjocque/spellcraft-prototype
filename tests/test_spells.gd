@@ -1700,3 +1700,15 @@ func test_move_rests_and_resumes() -> void:
 	stone.pos = Vector2(600, 400)  # knocked well away
 	run(sim, 8 * Simulation.TICK_RATE)
 	check(stone.pos.distance_to(spot) - stone.radius < 8.0, "Knocked away, it's pushed back to its goal")
+
+
+func test_spells_absorb_nearby_mana() -> void:
+	var sim := Simulation.new()
+	var caster := sim.spawn(Materials.make_player(Vector2(900, 300)))  # doesn't collect
+	caster.tags["infinite_mana"] = true
+	var host := sim.cast(caster, {"verb": "select", "qualifier": "player"}, Vector2.ZERO)
+	run(sim, 4 * Simulation.TICK_RATE)  # 0.4 of its 6 violet gone
+	var near := sim.spawn(Materials.make_mana("violet", 0.2, host.pos + Vector2(30, 0)))
+	var far := sim.spawn(Materials.make_mana("violet", 0.2, host.pos + Vector2(0, Simulation.ABSORB_RADIUS + 10)))
+	run(sim, 1)
+	check(near.dead and not far.dead, "A spell draws in mana within 1 m of it, not further")

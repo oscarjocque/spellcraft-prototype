@@ -26,6 +26,7 @@ const MAX_CRYSTALS := 12
 const FOUNTAIN_TICKS := 2 * TICK_RATE  # a fountain wells up a crystal this often
 const FOUNTAIN_POOL := 3  # while fewer than this many of its crystals lie around it
 const FOUNTAIN_REACH := 70.0
+const ABSORB_RADIUS := 40.0  # a spell absorbs mana this close to it (1 m)
 
 var tick := 0
 var objects: Array[WorldObject] = []
@@ -77,6 +78,7 @@ func step(commands: Dictionary = {}) -> void:
 
 	_integrate()
 	_contacts()
+	_absorb()
 	_update_states()
 	_cleanup()
 	_spawn_mana()
@@ -356,6 +358,16 @@ func _contacts() -> void:
 			Rules.on_contact(self, a, b)
 			Rules.on_contact(self, b, a)
 	_touching = touching
+
+
+## Every spell absorbs the mana within ABSORB_RADIUS of it (see Rules.absorb).
+func _absorb() -> void:
+	for host in objects:
+		if host.dead or host.spell == null:
+			continue
+		for o in objects:
+			if not o.dead and o.has_tag("mana") and host.pos.distance_to(o.pos) <= ABSORB_RADIUS:
+				Rules.absorb(host, o)
 
 
 ## Two solid things touching and closing on each other stop closing: the

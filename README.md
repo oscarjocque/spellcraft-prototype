@@ -334,8 +334,9 @@ three times the listed rate, wood under half, fire next to nothing; while it
 has nothing to push, a Move drains its listed rate. Pointing at something
 shows its weight, and the typing bar says what a Move would push and the
 factor. A spell
-that touches mana absorbs it into its own fuel, up to its limit and only in
-colors it uses, so `Move (Closest Mana) to It` can top up a running spell.
+draws in mana within 1 m of it (a faint circle around a spell loose in the
+world) into its own fuel, up to its limit and only in colors it uses, so
+`Move (Closest Mana) to It` can top up a running spell.
 
 ## How it's built
 
@@ -384,7 +385,7 @@ constants at the top of each script.
 - **Create places its object in front of the caster**, toward the cursor, so it needs no Where.
 - **Create keeps creating until its mana runs out.** Each new object goes in the free spot closest to where Create aims: just in front of you toward where you cast, or with *at*, right in front of what it's at (on it, for There). Spots are tried outward from there, your side first, so objects gather around that point, and a gap (an object destroyed or pushed away) is refilled first. With no free spot within reach (6 object widths), Create waits. While the spell lasts it sustains everything it made, so fire doesn't burn out. Building takes about 1.5 s for wood and 1 s for fire. Created objects stay after the spell ends, though fire then burns out after 10 s.
 - **Mana storage is a limit per color** (30), and players start full.
-- **A spell holds at most 60 s of its own drain** in each color, plus the reserve for the spells it creates (each of them full, counting what they create in turn), so its limits grow with what it consumes. Casting fills it from storage up to that; a spell touching mana tops up only to its limit, and only in colors it uses; a created spell starts full. Pointing at a spell shows its mana against its limits, and the typing bar shows what a spell holds.
+- **A spell holds at most 60 s of its own drain** in each color, plus the reserve for the spells it creates (each of them full, counting what they create in turn), so its limits grow with what it consumes. Casting fills it from storage up to that; a spell drawing in mana tops up only to its limit, and only in colors it uses; a created spell starts full. Pointing at a spell shows its mana against its limits, and the typing bar shows what a spell holds.
 - **Blocks that change the world drain 0.2 mana per second** of their color (verbs, and what Create makes), **structural blocks 0.05** (pickers, things picked, adjectives, nouns, relations, within, at, away from, up to): a typical spell runs for 30–60 s, and a Hold, which changes nothing, is cheap. Colors follow the design doc's first sketch, and Wood, Me, It and Mana have colors assigned here.
 - **Mana can be selected and moved but not created.** Create Mana would produce mana for less than it yields.
 - **Mana crystals regrow:** one random crystal appears every 3 s, up to 12 in the world.

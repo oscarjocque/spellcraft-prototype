@@ -144,6 +144,8 @@ func _draw_spell(o: WorldObject) -> void:
 	var s := o.spell
 	var p: Vector2 = _spell_at.get(o, _p(o))
 	var color: Color = VERB_COLOR[s.ast["verb"]]
+	if not _spell_at.has(o):  # loose in the world: show how far it draws in mana
+		draw_arc(p, Simulation.ABSORB_RADIUS, 0, TAU, 32, Color(color, 0.18), 1.0)
 	if s.paused:
 		_draw_diamond(p, o.radius, Color(color, 0.35))  # waiting for its turn
 		return
