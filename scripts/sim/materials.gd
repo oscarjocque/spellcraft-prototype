@@ -49,13 +49,20 @@ static func make_mana(color: String, amount: float, pos: Vector2) -> WorldObject
 	var o := WorldObject.new()
 	o.tags = {"mana": true}
 	o.pos = pos
-	o.radius = 7.0
-	o.mass = 2.0
 	o.health = 10.0
 	o.max_health = 10.0
 	o.mana_color = color
 	o.mana_amount = amount
+	size_mana(o)
 	return o
+
+
+## A mana orb's size and weight follow how much it holds: a crystal of 5 is
+## 7 px across the middle and weighs 2; area and weight grow with the amount.
+static func size_mana(o: WorldObject) -> void:
+	var share := maxf(o.mana_amount, 0.0) / Simulation.MANA_CRYSTAL
+	o.radius = clampf(7.0 * sqrt(share), 3.0, 40.0)
+	o.mass = maxf(2.0 * share, 0.1)
 
 
 ## A spot in the world, made by There: invisible, weightless, and gone when

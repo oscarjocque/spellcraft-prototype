@@ -77,8 +77,13 @@ In the sandbox the player has **infinite mana**: casting never takes from
 storage, but each spell still gets its usual fuel and reserve. To turn it
 off, remove the `infinite_mana` tag in `scripts/sandbox.gd`. Then walk over
 the colored diamonds to collect mana. **Fountains**, one per color, well up a
-crystal of their color every 2 s (keeping up to 3 around them); they can't
-be moved by spells or by what runs into them, but they are Things.
+crystal of their color every 2 s (keeping up to 3 crystals' worth around
+them); they can't be moved by spells or by what runs into them, but they are
+Things. **Mana of one color flows together**: orbs that come within a few
+pixels of each other merge into one, holding the sum, bigger and heavier
+(size and weight follow the amount, so a big orb costs more to Move). A
+player or a spell takes only what it has room for, so a big orb is drained
+partly and shrinks.
 
 ### Levels
 
@@ -388,7 +393,7 @@ constants at the top of each script.
 - **A spell holds at most 60 s of its own drain** in each color, plus the reserve for the spells it creates (each of them full, counting what they create in turn), so its limits grow with what it consumes. Casting fills it from storage up to that; a spell drawing in mana tops up only to its limit, and only in colors it uses; a created spell starts full. Pointing at a spell shows its mana against its limits, and the typing bar shows what a spell holds.
 - **Blocks that change the world drain 0.2 mana per second** of their color (verbs, and what Create makes), **structural blocks 0.05** (pickers, things picked, adjectives, nouns, relations, within, at, away from, up to): a typical spell runs for 30–60 s, and a Hold, which changes nothing, is cheap. Colors follow the design doc's first sketch, and Wood, Me, It and Mana have colors assigned here.
 - **Mana can be selected and moved but not created.** Create Mana would produce mana for less than it yields.
-- **Mana crystals regrow:** one random crystal appears every 3 s, up to 12 in the world.
+- **Mana crystals regrow:** one random crystal appears every 3 s, while the world holds less than 12 crystals' worth.
 - **Picks are stored in the spell.** What you click for This and There is written into the cast spell, so the server can check it: This must be an existing object or spell (not the spell itself; that's Self), There inside the arena.
 - **Spells are edited in the spellbook while the game is paused, or typed while it runs.** The word menus only offer words that fit the grammar.
 - **Objects are circles.** There are no boxes or height layers yet.

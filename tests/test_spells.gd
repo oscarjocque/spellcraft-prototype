@@ -1500,9 +1500,13 @@ func test_fountains() -> void:
 	var fountain := sim.spawn(Materials.make_fountain("blue", Vector2(600, 360)))
 	run(sim, 10 * Simulation.TICK_RATE)
 	var crystals := sim.objects.filter(func(o: WorldObject) -> bool:
-		return o.has_tag("mana") and o.pos.distance_to(fountain.pos) <= Simulation.FOUNTAIN_REACH)
-	check(crystals.size() == Simulation.FOUNTAIN_POOL and crystals.all(func(o: WorldObject) -> bool: return o.mana_color == "blue"),
-		"A fountain wells up crystals of its color, a few at a time")
+		return not o.dead and o.has_tag("mana") and o.pos.distance_to(fountain.pos) <= Simulation.FOUNTAIN_REACH)
+	var pooled := 0.0
+	for o in crystals:
+		pooled += o.mana_amount
+	check(is_equal_approx(pooled, Simulation.FOUNTAIN_POOL * Simulation.MANA_CRYSTAL)
+		and crystals.all(func(o: WorldObject) -> bool: return o.mana_color == "blue"),
+		"A fountain wells up mana of its color, a few crystals' worth at a time")
 	var spell := sim.cast(p, {"verb": "move", "what": {"ref": "this", "id": fountain.id}, "to": {"ref": "me"}}, Vector2.ZERO)
 	var stone := sim.spawn(Materials.make("stone", Vector2(500, 360)))
 	stone.velocity = Vector2(Spell.MOVE_SPEED, 0)
@@ -1712,3 +1716,26 @@ func test_spells_absorb_nearby_mana() -> void:
 	var far := sim.spawn(Materials.make_mana("violet", 0.2, host.pos + Vector2(0, Simulation.ABSORB_RADIUS + 10)))
 	run(sim, 1)
 	check(near.dead and not far.dead, "A spell draws in mana within 1 m of it, not further")
+
+
+func test_mana_orbs_combine() -> void:
+	var sim := Simulation.new()
+	var a := sim.spawn(Materials.make_mana("red", 5.0, Vector2(300, 300)))
+	var b := sim.spawn(Materials.make_mana("red", 5.0, Vector2(316, 300)))
+	var blue := sim.spawn(Materials.make_mana("blue", 5.0, Vector2(300, 316)))
+	var far := sim.spawn(Materials.make_mana("red", 5.0, Vector2(600, 300)))
+	run(sim, 1)
+	check(b.dead and is_equal_approx(a.mana_amount, 10.0) and a.pos == Vector2(308, 300),
+		"Orbs of one color close together flow into one, in their middle")
+	check(not blue.dead and not far.dead and blue.mana_amount == 5.0, "...but not other colors, or far ones")
+	check(a.radius > 7.0 * 1.4 and is_equal_approx(a.mass, 4.0), "A bigger orb is bigger and heavier")
+
+	var big := sim.spawn(Materials.make_mana("violet", 30.0, Vector2(900, 500)))
+	var caster := sim.spawn(Materials.make_player(Vector2(900, 500)))  # doesn't collect
+	caster.tags["infinite_mana"] = true
+	var host := sim.cast(caster, {"verb": "select", "qualifier": "player"}, Vector2.ZERO)
+	host.spell.mana["violet"] = 1.0
+	var radius := big.radius
+	run(sim, 1)
+	check(not big.dead and is_equal_approx(big.mana_amount, 25.0 - 0.005) and big.radius < radius,
+		"A spell drains a big orb only as far as it has room, and the orb shrinks")

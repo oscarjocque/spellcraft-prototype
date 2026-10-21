@@ -185,6 +185,9 @@ func _describe(o: WorldObject) -> String:
 		if o != player and sim.has_adjective(o, adj, player):
 			words.append("[color=#%s]%s[/color]" % [SpellText.color_of(adj).to_html(false), adj])
 	var text := " · ".join(words) + "  [color=#8a8f98]weight %s[/color]" % _weight(o.mass)
+	if o.has_tag("mana"):
+		text += "  [color=#%s]%s %s[/color]" % [WorldView.MANA_COLOR[o.mana_color].to_html(false),
+			_weight(o.mana_amount), o.mana_color]
 	if o.health < o.max_health:
 		text += "  [color=#8a8f98]%d/%d[/color]" % [o.health, o.max_health]
 	return "[font_size=13]%s[/font_size]" % text

@@ -24,9 +24,10 @@ const MANA_CRYSTAL := 5.0  # mana in a naturally spawned crystal
 const MANA_SPAWN_TICKS := 3 * TICK_RATE
 const MAX_CRYSTALS := 12
 const FOUNTAIN_TICKS := 2 * TICK_RATE  # a fountain wells up a crystal this often
-const FOUNTAIN_POOL := 3  # while fewer than this many of its crystals lie around it
+const FOUNTAIN_POOL := 3  # while less than this many crystals' worth lies around it
 const FOUNTAIN_REACH := 70.0
 const ABSORB_RADIUS := 40.0  # a spell absorbs mana this close to it (1 m)
+const MERGE_GAP := 6.0  # orbs of one color this close (edge to edge) flow together
 
 var tick := 0
 var objects: Array[WorldObject] = []
@@ -79,6 +80,7 @@ func step(commands: Dictionary = {}) -> void:
 	_integrate()
 	_contacts()
 	_absorb()
+	_merge_mana()
 	_update_states()
 	_cleanup()
 	_spawn_mana()
@@ -370,6 +372,31 @@ func _absorb() -> void:
 				Rules.absorb(host, o)
 
 
+## Mana orbs of the same color that come close flow together into one, at
+## their mana-weighted middle; then every orb is sized for what it holds.
+func _merge_mana() -> void:
+	var orbs: Array[WorldObject] = []
+	for o in objects:
+		if not o.dead and o.has_tag("mana"):
+			orbs.append(o)
+	for i in orbs.size():
+		var a := orbs[i]
+		for j in range(i + 1, orbs.size()):
+			var b := orbs[j]
+			if a.dead or b.dead or a.mana_color != b.mana_color:
+				continue
+			if a.pos.distance_to(b.pos) <= a.radius + b.radius + MERGE_GAP:
+				var total := a.mana_amount + b.mana_amount
+				a.pos = (a.pos * a.mana_amount + b.pos * b.mana_amount) / total
+				a.velocity = (a.velocity * a.mass + b.velocity * b.mass) / (a.mass + b.mass)
+				a.mana_amount = total
+				b.dead = true
+				Materials.size_mana(a)
+	for o in orbs:
+		if not o.dead:
+			Materials.size_mana(o)
+
+
 ## Two solid things touching and closing on each other stop closing: the
 ## one moving into still stone stops dead along the line between them;
 ## otherwise they go on together along it, sharing their momentum (heavy
@@ -462,11 +489,11 @@ func _spawn_mana() -> void:
 				_well_up(f)
 	if tick % MANA_SPAWN_TICKS != 0 or not wild_mana:
 		return
-	var count := 0
+	var total := 0.0  # mana, not crystals: crystals flow together
 	for o in objects:
 		if o.has_tag("mana"):
-			count += 1
-	if count >= MAX_CRYSTALS:
+			total += o.mana_amount
+	if total >= MAX_CRYSTALS * MANA_CRYSTAL:
 		return
 	var color: String = SpellGrammar.COLORS[rng.randi_range(0, SpellGrammar.COLORS.size() - 1)]
 	var area := ARENA.grow(-40)
@@ -477,11 +504,11 @@ func _spawn_mana() -> void:
 ## A fountain puts a crystal of its color just beside it, unless enough of
 ## them lie around it already.
 func _well_up(fountain: WorldObject) -> void:
-	var near := 0
+	var near := 0.0  # mana, not crystals: crystals flow together
 	for o in objects:
 		if not o.dead and o.has_tag("mana") and o.pos.distance_to(fountain.pos) <= FOUNTAIN_REACH:
-			near += 1
-	if near >= FOUNTAIN_POOL:
+			near += o.mana_amount
+	if near >= FOUNTAIN_POOL * MANA_CRYSTAL:
 		return
 	var at := fountain.pos + Vector2.from_angle(rng.randf_range(0.0, TAU)) * (fountain.radius + 14.0)
 	spawn(Materials.make_mana(fountain.mana_color, MANA_CRYSTAL, at))
